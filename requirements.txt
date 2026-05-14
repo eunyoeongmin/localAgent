@@ -1,0 +1,12 @@
+chainlit
+langchain-core
+langchain-openai
+langchain-community
+pydantic
+pypdf
+rich
+huggingface-hub
+httpx
+python-dotenv
+duckduckgo-search
+ruff

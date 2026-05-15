@@ -2,12 +2,14 @@ import os
 import datetime
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from tools import all_tools
 
 load_dotenv()
 
-# 환경 변수에서 설정을 가져오거나 기본값을 사용합니다.
-# 배포 시에는 로컬 터널링 주소(ngrok, cloudflare 등)를 BASE_URL로 설정해야 합니다.
+# [변경] Gemini API 키 설정 (사용자가 설정한 GEMINI_BASE_URL 도 인식)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
+
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
 LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "local-model")
@@ -15,7 +17,15 @@ CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
-def create_local_llm(*, temperature: float) -> ChatOpenAI:
+def create_llm(*, temperature: float):
+    # API 키가 있으면 Gemini 사용 (매우 빠름)
+    if GOOGLE_API_KEY:
+        return ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            google_api_key=GOOGLE_API_KEY,
+            temperature=temperature,
+        )
+    # API 키가 없으면 로컬 LLM 사용
     return ChatOpenAI(
         base_url=LM_STUDIO_BASE_URL,
         api_key=LM_STUDIO_API_KEY,
@@ -24,11 +34,8 @@ def create_local_llm(*, temperature: float) -> ChatOpenAI:
     )
 
 
-# 一般会話用モデル
-chat_llm = create_local_llm(temperature=CHAT_TEMPERATURE)
-
-# ツール選択および実行用モデル
-tool_llm = create_local_llm(temperature=TOOL_TEMPERATURE)
+chat_llm = create_llm(temperature=CHAT_TEMPERATURE)
+tool_llm = create_llm(temperature=TOOL_TEMPERATURE)
 
 # current_date = datetime.datetime.now().strftime("%Y年 %m月 %d日")
 now = datetime.datetime.now()

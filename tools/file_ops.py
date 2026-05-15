@@ -182,6 +182,7 @@ class LocalFileWriteInput(BaseModel):
     content: str = Field(description="ファイルに書き込む全内容（既存ファイルの場合は上書き）")
 
 
+
 @tool(args_schema=LocalFileWriteInput)
 async def write_local_file(path: str, content: str) -> str:
     """
@@ -194,7 +195,7 @@ async def write_local_file(path: str, content: str) -> str:
         print(f"\n[DEBUG] ファイル書き込み: {abs_path}")
         with open(abs_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        print(f"[DEBUG] ファイル書き込み完了")
+        print("[DEBUG] ファイル書き込み完了")
         return f"ファイル保存完了: {abs_path}"
     except Exception as e:
         return f"ファイル書き込み失敗: {str(e)}"
@@ -207,8 +208,8 @@ class ListDirectoryInput(BaseModel):
 @tool(args_schema=ListDirectoryInput)
 async def list_directory(path: str) -> str:
     """
-    特定のフォルダ内にどのようなファイルとサブフォルダがあるかのリストを返します。
-    ユーザーがどのようなファイルがあるか尋ねたり、ファイルを探す前にフォルダ構造を把握したりするときに使用します。
+    特定のフォルダ内にどのようなファイルとサブフォルダがあるかのリストを返します.
+    ユーザーがどのようなファイルがあるか尋ねたり、ファイルを探す前にフォルダ構造を把握したりするときに使用합니다。
     """
     try:
         abs_path = os.path.abspath(path)
@@ -231,7 +232,7 @@ async def list_directory(path: str) -> str:
 
 
 class ReplaceInFileInput(BaseModel):
-    path: str = Field(description="修正するファイルパス（絶対パスまたは相対パス）")
+    path: str = Field(description="修正するファイルのパス（絶対パスまたは相対パス）")
     old_text: str = Field(description="探して置き換える既存のテキスト")
     new_text: str = Field(description="既存のテキストを置き換える新しいテキスト")
     max_replacements: int = Field(description="最大置換回数（デフォルト 1）", default=1)
@@ -284,7 +285,7 @@ class RunValidationInput(BaseModel):
 @tool(args_schema=RunValidationInput)
 async def run_validation(check: str = "pytest") -> str:
     """
-    コード修正後にテスト/リントを実行して結果を返します。
+    コード修正後にテスト/リントを実行して結果を返します.
     許可された検証コマンドのみを実行して安全性を維持します。
     """
     commands = {
@@ -313,6 +314,7 @@ async def run_validation(check: str = "pytest") -> str:
         merged = "\n".join([part for part in [stdout, stderr] if part])
         if len(merged) > 8000:
             merged = merged[:8000] + "\n\n[... 出力省略 ...]"
+
 
         if completed.returncode == 0:
             return f"検証成功 ({selected})\n{merged}" if merged else f"検証成功 ({selected})"
@@ -344,9 +346,6 @@ def display_diff_with_colors(old_content: str, new_content: str, file_path: str)
         return
 
     if RICH_AVAILABLE:
-        from rich.syntax import Syntax
-
-        diff_text = "".join(diff_lines)
         console.print("\n[GitHub PRスタイル Diff]\n")
         for line in diff_lines:
             if line.startswith("+++") or line.startswith("---"):
@@ -402,12 +401,14 @@ async def confirm_and_apply_changes(
     file_path: str, old_content: str, new_content: str
 ) -> str:
     """
-    ファイル変更事項をDiffで視覚化し、ユーザー承認後に実際に適用します。
+    ファイルの変更事項をDiffで視覚化し、ユーザーの承認後に実際に適用します。
     返り値:
-    - "success:<ファイルパス>" → 変更適用完了
+    - "success:<ファイルパス>" → 変更の適用完了
     - "rejected" → ユーザーが拒否
-    - "edit:<フィードバック>" → ユーザーがフィードバック提示（エージェントが再修正する必要あり）
+    - "edit:<フィードバック>" → ユーザーがフィードバックを提示（エージェントが再修正する必要あり）
     """
+
+
     abs_path = os.path.abspath(file_path)
     print(f"\n{'=' * 60}")
     print(f"ファイル: {abs_path}")

@@ -109,7 +109,9 @@ async def run_agent():
             if not response.tool_calls:
                 final_response = await generate_final_response(messages)
                 messages.append(final_response)
-                print(f"\n{final_response.content}\n")
+                # [수정] 응답 내용이 리스트일 경우를 대비해 문자열로 변환
+                content_str = str(final_response.content)
+                print(f"\n{content_str}\n")
                 tool_phase_completed = True
                 break
 
@@ -191,7 +193,8 @@ async def main(message: cl.Message):
             final_response = await generate_final_response(messages)
             messages.append(final_response)
             
-            msg.content = final_response.content
+            # [수정] 응답 내용이 리스트일 경우를 대비해 문자열로 변환
+            msg.content = str(final_response.content)
             await msg.update()
             
             tool_phase_completed = True

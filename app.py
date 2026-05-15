@@ -1,6 +1,15 @@
-import sys  # [追加] 実行モード（CLI/GUI）を自動判定するために追加
-import asyncio
+import sys
 import subprocess
+
+# [추가] 허깅페이스 환경에서 ddgs 모듈을 찾지 못하는 문제 해결을 위한 런타임 설치
+try:
+    from duckduckgo_search import DDGS
+except ImportError:
+    print("[INFO] ddgs 패키지를 찾을 수 없어 설치를 시도합니다...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
+
+import asyncio
+import subprocess as sp # sp로 별칭 설정 (기존 subprocess와 충돌 방지)
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from config import chat_llm, tool_llm, SYSTEM_PROMPT
@@ -234,7 +243,7 @@ if __name__ == "__main__":
         if choice == "2":
             print("\n[INFO] GUI 모드를 시작합니다... (Chainlit 서버 시작)")
             # 7860 포트는 허깅페이스 스페이스의 기본 포트입니다.
-            subprocess.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860"])
+            sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860"])
         else:
             print("\n[INFO] 터미널(CLI) 모드로 실행합니다.")
             asyncio.run(run_agent())

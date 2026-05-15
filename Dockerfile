@@ -1,5 +1,5 @@
-# Python 3.9 이미지 사용
-FROM python:3.9
+# Python 3.12 이미지 사용
+FROM python:3.12
 
 # 작업 디렉토리 설정
 WORKDIR /code

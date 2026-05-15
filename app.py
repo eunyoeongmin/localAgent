@@ -11,7 +11,7 @@ except (ImportError, AttributeError):
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
 
 import asyncio
-import subprocess as sp # spとしてエイリアス設定 (既存のsubprocessとの衝突防止)
+import subprocess as sp # spとしてエイリア스設定 (既存のsubprocessとの衝突防止)
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from config import chat_llm, tool_llm, SYSTEM_PROMPT
@@ -184,7 +184,7 @@ async def main(message: cl.Message):
             
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        res_text = f"\n[変更計画]\n{plan_text}\n\n[システム] この計画通りに進める場合は「承認」と入力してください. キャンセルする場合は他の入力をしてください。"
+        res_text = f"\n[変更計画]\n{plan_text}\n\n[システム] この計画通りに進める場合は「承認」と入力してください。キャンセルする場合は他の入力をしてください。"
         await cl.Message(content=res_text).send()
         
         messages.append(HumanMessage(content=query))

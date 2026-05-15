@@ -7,8 +7,10 @@ from tools import all_tools
 
 load_dotenv()
 
-# [변경] Gemini API 키 설정 (사용자가 설정한 GEMINI_BASE_URL 도 인식)
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
+# [변경] Gemini API 키 설정 (환경 변수 값의 앞뒤 공백 제거)
+# Python은 .strip()을 사용합니다.
+raw_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
+GOOGLE_API_KEY = raw_key.strip() if raw_key else None
 
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
 LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
@@ -18,13 +20,14 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
 def create_llm(*, temperature: float):
-    # API 키가 있으면 Gemini 사용 (매우 빠름)
+    # API 키가 있으면 Gemini 사용 (최신 3.1 Flash-Lite 모델 적용)
     if GOOGLE_API_KEY:
         return ChatGoogleGenerativeAI(
-            model="gemini-3.1-flash-lite-preview",
+            model="gemini-3.1-flash-lite", # 2026년 최신 정식 모델명
             google_api_key=GOOGLE_API_KEY,
             temperature=temperature,
         )
+
     # API 키가 없으면 로컬 LLM 사용
     return ChatOpenAI(
         base_url=LM_STUDIO_BASE_URL,

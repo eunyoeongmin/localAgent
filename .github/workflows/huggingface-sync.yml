@@ -1,12 +1,11 @@
-name: Sync to Hugging Face space
+name: CI and Sync to Hugging Face
 on:
   push:
     branches: [main]
-  # 수동 실행 옵션
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  ci-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -15,7 +14,24 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - name: Push to hub
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Lint with ruff
+        run: |
+          pip install ruff
+          ruff check .
+
+      # 모든 테스트가 통과했을 때만 배포 진행
+      - name: Push to Hugging Face
+        if: success()
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |

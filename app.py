@@ -62,7 +62,24 @@ async def generate_final_response(messages: list) -> AIMessage:
     return await chat_llm.ainvoke(messages)
 
 
-# [変更] コメントアウトを解除し、CLI用のメインループ関数を有効化
+def extract_content(content) -> str:
+    """LLM의 응답 내용에서 순수 텍스트만 추출합니다."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        # 리스트 형태의 응답 (예: Gemini 3.1) 처리
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict) and 'text' in item:
+                text_parts.append(item['text'])
+            elif isinstance(item, str):
+                text_parts.append(item)
+        return "".join(text_parts)
+    return str(content)
+
+
+# [변경] コメントアウトを解除し、CLI用のメインループ関数を有効化
+
 async def run_agent():
     DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が質問を解決するには不十分であるか、無効なデータである場合は、キーワードを具体的に変更して web_search ツールを再度呼び出してください。"
     messages = [SystemMessage(content=DYNAMIC_PROMPT)]
@@ -109,8 +126,8 @@ async def run_agent():
             if not response.tool_calls:
                 final_response = await generate_final_response(messages)
                 messages.append(final_response)
-                # [수정] 응답 내용이 리스트일 경우를 대비해 문자열로 변환
-                content_str = str(final_response.content)
+                # [수정] extract_content 함수를 사용하여 순수 텍스트만 추출
+                content_str = extract_content(final_response.content)
                 print(f"\n{content_str}\n")
                 tool_phase_completed = True
                 break
@@ -193,8 +210,8 @@ async def main(message: cl.Message):
             final_response = await generate_final_response(messages)
             messages.append(final_response)
             
-            # [수정] 응답 내용이 리스트일 경우를 대비해 문자열로 변환
-            msg.content = str(final_response.content)
+            # [수정] extract_content 함수를 사용하여 순수 텍스트만 추출
+            msg.content = extract_content(final_response.content)
             await msg.update()
             
             tool_phase_completed = True

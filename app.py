@@ -4,7 +4,9 @@ import subprocess
 import importlib.util
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題解決のためのランタイムインストール
-if importlib.util.find_spec("duckduckgo_search") is None:
+try:
+    importlib.util.find_spec("ddgs")
+except (ImportError, AttributeError):
     print("[INFO] ddgsパッケージが見つからないため、インストールを試行します...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
 

@@ -245,7 +245,9 @@ if __name__ == "__main__":
         if choice == "2":
             print("\n[INFO] GUIモードを起動します... (Chainlit サーバー開始)")
             # 7860ポートはHugging Face Spacesのデフォルトポートです。
-            sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860"])
+            # --host 0.0.0.0 을 추가하여 외부 접속을 허용하고, --headless 로 브라우저 실행을 방지합니다.
+            sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860", "--host", "0.0.0.0", "--headless"])
         else:
+
             print("\n[INFO] ターミナル(CLI)モードで実行します。")
             asyncio.run(run_agent())

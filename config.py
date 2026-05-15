@@ -7,8 +7,8 @@ from tools import all_tools
 
 load_dotenv()
 
-# [변경] Gemini API 키 설정 (환경 변수 값의 앞뒤 공백 제거)
-# Python은 .strip()을 사용합니다.
+# [変更] Gemini APIキー設定 (環境変数値の前後空白除去)
+# Pythonは .strip() を使用します。
 raw_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
 GOOGLE_API_KEY = raw_key.strip() if raw_key else None
 
@@ -20,15 +20,15 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
 def create_llm(*, temperature: float):
-    # API 키가 있으면 Gemini 사용 (최신 3.1 Flash-Lite 모델 적용)
+    # APIキーがあればGemini使用 (最新 3.1 Flash-Lite モデル適用)
     if GOOGLE_API_KEY:
         return ChatGoogleGenerativeAI(
-            model="gemini-3.1-flash-lite", # 2026년 최신 정식 모델명
+            model="gemma-4-31b-it", # 2026년 최신 정식 모델명
             google_api_key=GOOGLE_API_KEY,
             temperature=temperature,
         )
 
-    # API 키가 없으면 로컬 LLM 사용
+    # APIキーがなければローカルLLM使用
     return ChatOpenAI(
         base_url=LM_STUDIO_BASE_URL,
         api_key=LM_STUDIO_API_KEY,
@@ -58,7 +58,7 @@ SYSTEM_PROMPT = f"""あなたは2026年型の最高級自律型エージェン�
 
 [思考プロセスおよび回答ルール]
 ユーザーの質問に答える際、すぐに回答を出さず、必ず内部的に次のプロセスを経てから回答してください。
-1. 要求事項分析：ユーザー이 提示したすべての質問と「追加条件（口調、長さ、書式など）」を把握します。
+1. 要求事項分析：ユーザーが提示したすべての質問と「追加条件（口調、長さ、書式など）」を把握します。
 2. ツール実行：上記のツールリストを参考に、状況に合ったツールを選択して使用してください。
    - 検索ツール使用時に「今日」、「最新」、「今年」という言葉があれば、必ずシステム日付をキーワードに含めてください。
    - コード修正の依頼を受けた場合は、可能な限り write_local_file よりも replace_in_file を優先的に使用してください。

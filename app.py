@@ -63,11 +63,11 @@ async def generate_final_response(messages: list) -> AIMessage:
 
 
 def extract_content(content) -> str:
-    """LLM의 응답 내용에서 순수 텍스트만 추출합니다."""
+    """LLMの応答内容から純粋なテキストのみを抽出します。"""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        # 리스트 형태의 응답 (예: Gemini 3.1) 처리
+        # リスト形式の応答（例：Gemini 3.1）の処理
         text_parts = []
         for item in content:
             if isinstance(item, dict) and 'text' in item:
@@ -78,79 +78,78 @@ def extract_content(content) -> str:
     return str(content)
 
 
-# [변경] コメントアウトを解除し、CLI用のメインループ関数を有効化
-
-async def run_agent():
-    DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が質問を解決するには不十分であるか、無効なデータである場合は、キーワードを具体的に変更して web_search ツールを再度呼び出してください。"
-    messages = [SystemMessage(content=DYNAMIC_PROMPT)]
-    pending_change_request = None
-
-    while True:
-        query = input("👤 User: ")
-        if query.lower() in ['exit', 'quit', 'q']:
-            break
-        if not query.strip():
-            continue
-
-        if pending_change_request is not None:
-            if is_approval(query):
-                approved_request = pending_change_request
-                pending_change_request = None
-                approval_note = (
-                    "ユーザーが変更計画を承認しました。 "
-                    "承認された範囲内でのみツールを使用して変更を実行してください。"
-                )
-                messages.append(HumanMessage(content=approval_note + f"\n元のリクエスト: {approved_request}"))
-            else:
-                print("\n[システム] 計画がキャンセルされました。他のリクエストを入力してください。\n")
-                pending_change_request = None
-                continue
-        elif is_code_change_request(query):
-            plan_text = await generate_change_plan(query)
-            print("\n[変更計画]\n" + plan_text)
-            print("\n[システム] この計画通りに進める場合は「承認」と入力してください。キャンセルする場合は他の入力をしてください。\n")
-            messages.append(HumanMessage(content=query))
-            messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
-            pending_change_request = query
-            continue
-        else:
-            messages.append(HumanMessage(content=query))
-
-        max_retries = 3
-        current_attempt = 0
-        tool_phase_completed = False
-
-        while current_attempt < max_retries:
-            response = await tool_llm_with_tools.ainvoke(messages)
-
-            if not response.tool_calls:
-                final_response = await generate_final_response(messages)
-                messages.append(final_response)
-                # [수정] extract_content 함수를 사용하여 순수 텍스트만 추출
-                content_str = extract_content(final_response.content)
-                print(f"\n{content_str}\n")
-                tool_phase_completed = True
-                break
-
-            messages.append(response)
-
-            for tool_call in response.tool_calls:
-                tool_name = tool_call['name']
-                tool_args = tool_call['args']
-                matched = next((t for t in all_tools if t.name == tool_name), None)
-                if matched:
-                    result = await matched.ainvoke(tool_args)
-                else:
-                    result = f"エラー：不明なツール（{tool_name}）です。"
-                messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
-
-            current_attempt += 1
-
-        if not tool_phase_completed and current_attempt == max_retries:
-            print("\n[システム] 検索を数回試みましたが、完璧な情報を見つけることができませんでした。これまでの情報を基に回答を要約します。")
-            final_fallback = await generate_final_response(messages)
-            messages.append(final_fallback)
-            print(f"{final_fallback.content}\n")
+# [変更] CLI用のメインループ関数をコメントアウト (Web GUI専用)
+# async def run_agent():
+#     DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が質問を解決するには不十分であるか、無効なデータである場合は、キーワードを具体的に変更して web_search ツールを再度呼び出してください。"
+#     messages = [SystemMessage(content=DYNAMIC_PROMPT)]
+#     pending_change_request = None
+#
+#     while True:
+#         query = input("👤 User: ")
+#         if query.lower() in ['exit', 'quit', 'q']:
+#             break
+#         if not query.strip():
+#             continue
+#
+#         if pending_change_request is not None:
+#             if is_approval(query):
+#                 approved_request = pending_change_request
+#                 pending_change_request = None
+#                 approval_note = (
+#                     "ユーザーが変更計画を承認しました。 "
+#                     "承認された範囲内でのみツールを使用して変更を実行してください。"
+#                 )
+#                 messages.append(HumanMessage(content=approval_note + f"\n元のリクエスト: {approved_request}"))
+#             else:
+#                 print("\n[システム] 計画がキャンセルされました。他のリクエストを入力してください。\n")
+#                 pending_change_request = None
+#                 continue
+#         elif is_code_change_request(query):
+#             plan_text = await generate_change_plan(query)
+#             print("\n[変更計画]\n" + plan_text)
+#             print("\n[システム] この計画通りに進める場合は「承認」と入力してください。キャンセルする場合は他の入力をしてください。\n")
+#             messages.append(HumanMessage(content=query))
+#             messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
+#             pending_change_request = query
+#             continue
+#         else:
+#             messages.append(HumanMessage(content=query))
+#
+#         max_retries = 3
+#         current_attempt = 0
+#         tool_phase_completed = False
+#
+#         while current_attempt < max_retries:
+#             response = await tool_llm_with_tools.ainvoke(messages)
+#
+#             if not response.tool_calls:
+#                 final_response = await generate_final_response(messages)
+#                 messages.append(final_response)
+#                 # [修正] extract_content関数を使用して純粋なテキストのみを抽出
+#                 content_str = extract_content(final_response.content)
+#                 print(f"\n{content_str}\n")
+#                 tool_phase_completed = True
+#                 break
+#
+#             messages.append(response)
+#
+#             for tool_call in response.tool_calls:
+#                 tool_name = tool_call['name']
+#                 tool_args = tool_call['args']
+#                 matched = next((t for t in all_tools if t.name == tool_name), None)
+#                 if matched:
+#                     result = await matched.ainvoke(tool_args)
+#                 else:
+#                     result = f"エラー：不明なツール（{tool_name}）です。"
+#                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
+#
+#             current_attempt += 1
+#
+#         if not tool_phase_completed and current_attempt == max_retries:
+#             print("\n[システム] 検索を数回試みましたが、完璧な情報を見つけることができませんでした。これまでの情報を基に回答を要約します。")
+#             final_fallback = await generate_final_response(messages)
+#             messages.append(final_fallback)
+#             print(f"{final_fallback.content}\n")
 
 
 @cl.on_chat_start
@@ -185,7 +184,7 @@ async def main(message: cl.Message):
             
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        res_text = f"\n[変更計画]\n{plan_text}\n\n[システム] この計画通りに進める場合は「承認」と入力してください。キャンセルする場合は他の入力をしてください。"
+        res_text = f"\n[変更計画]\n{plan_text}\n\n[システム] この計画通りに進める場合は「承認」と入力してください. キャンセルする場合は他の入力をしてください。"
         await cl.Message(content=res_text).send()
         
         messages.append(HumanMessage(content=query))
@@ -210,7 +209,7 @@ async def main(message: cl.Message):
             final_response = await generate_final_response(messages)
             messages.append(final_response)
             
-            # [수정] extract_content 함수를 사용하여 순수 텍스트만 추출
+            # [修正] extract_content関数を使用して純粋なテキストのみを抽出
             msg.content = extract_content(final_response.content)
             await msg.update()
             
@@ -238,36 +237,16 @@ async def main(message: cl.Message):
         final_fallback = await generate_final_response(messages)
         messages.append(final_fallback)
         
-        msg.content = fallback_msg + final_fallback.content
+        msg.content = fallback_msg + extract_content(final_fallback.content)
         await msg.update()
 
     cl.user_session.set("messages", messages)
 
 
-# [変更] 実行時に 1(CLI) か 2(GUI) を選択して起動するロジック
+# [変更] Web GUI専用実行ロジック (CLIモード除去)
 if __name__ == "__main__":
     if "chainlit" not in sys.argv[0]:
-        # 環境変数 RUN_MODE が 'GUI' なら即座に起動 (Docker用)
-
-        run_mode = os.getenv("RUN_MODE", "").upper()
-
-        if run_mode == "GUI":
-            choice = "2"
-        elif run_mode == "CLI":
-            choice = "1"
-        else:
-            print("実行モードを選択してください (EnterでGUI):")
-            print("1: ターミナル (CLI)")
-            print("2: Web GUI (Chainlit)")
-            choice = input("入力 (1 または 2): ").strip() or "2"
-
-
-        if choice == "2":
-            print("\n[INFO] GUIモードを起動します... (Chainlit サーバー開始)")
-            # 7860ポートはHugging Face Spacesのデフォルトポートです。
-            # --host 0.0.0.0 을 추가하여 외부 접속을 허용하고, --headless 로 브라우저 실행을 방지합니다.
-            sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860", "--host", "0.0.0.0", "--headless"])
-        else:
-
-            print("\n[INFO] ターミナル(CLI)モードで実行します。")
-            asyncio.run(run_agent())
+        print("\n[INFO] GUIモードを起動します... (Chainlit サーバー開始)")
+        # 7860ポートはHugging Face Spacesのデフォルトポートです。
+        # --host 0.0.0.0 を追加して外部接続を許可し、--headless でブラウザの実行を防止します。
+        sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860", "--host", "0.0.0.0", "--headless"])

@@ -8,5 +8,5 @@ rich
 huggingface-hub
 httpx
 python-dotenv
-duckduckgo-search
+duckduckgo-search>=5.0.0
 ruff

@@ -1,3 +1,4 @@
+import os
 import datetime
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -5,11 +6,13 @@ from tools import all_tools
 
 load_dotenv()
 
-LM_STUDIO_BASE_URL = "http://localhost:1234/v1"
-LM_STUDIO_API_KEY = "lm-studio"
-LM_STUDIO_MODEL = "local-model"
-CHAT_TEMPERATURE = 0.8
-TOOL_TEMPERATURE = 0.1
+# 환경 변수에서 설정을 가져오거나 기본값을 사용합니다.
+# 배포 시에는 로컬 터널링 주소(ngrok, cloudflare 등)를 BASE_URL로 설정해야 합니다.
+LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
+LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "local-model")
+CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
+TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
 def create_local_llm(*, temperature: float) -> ChatOpenAI:

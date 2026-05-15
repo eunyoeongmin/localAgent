@@ -1,0 +1,22 @@
+name: Sync to Hugging Face space
+on:
+  push:
+    branches: [main]
+  # 수동 실행 옵션
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push https://Eunyeongmin:$HF_TOKEN@huggingface.co/spaces/Eunyeongmin/LOCAL_LLM_TEST2 main

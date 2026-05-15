@@ -212,20 +212,29 @@ async def main(message: cl.Message):
     cl.user_session.set("messages", messages)
 
 
-# [変更] 実行時に 1(CLI) か 2(GUI) を選択して起動するロジック
+import os
+# ... (rest of imports)
+
+# [변경] 실행 시 1(CLI) 혹은 2(GUI)를 선택하거나, 환경변수에 따라 자동 실행
 if __name__ == "__main__":
-    # chainlitコマンドで実行されている場合は、入力プロンプトをスキップしてGUIを初期化
     if "chainlit" not in sys.argv[0]:
-        print("実行モードを選択してください:")
-        print("1: ターミナル (CLI)")
-        print("2: Web GUI (Chainlit)")
-        
-        choice = input("入力(1 または 2): ").strip()
-        
-        if choice == "2":
-            print("\n[INFO] GUIモードを起動します... (Chainlit サーバー開始)")
-            # 内部的に `chainlit run 現在のファイル名` を実行する
-            subprocess.run([sys.executable, "-m", "chainlit", "run", __file__])
+        # 환경 변수 RUN_MODE가 'GUI'면 바로 실행 (Docker용)
+        run_mode = os.getenv("RUN_MODE", "").upper()
+
+        if run_mode == "GUI":
+            choice = "2"
+        elif run_mode == "CLI":
+            choice = "1"
         else:
-            print("\n[INFO] ターミナル(CLI)モードで実行します。")
-            asyncio.run(run_agent())()
+            print("실행 모드를 선택하세요 (Enter 입력 시 GUI):")
+            print("1: 터미널 (CLI)")
+            print("2: Web GUI (Chainlit)")
+            choice = input("입력(1 또는 2): ").strip() or "2"
+
+        if choice == "2":
+            print("\n[INFO] GUI 모드를 시작합니다... (Chainlit 서버 시작)")
+            # 7860 포트는 허깅페이스 스페이스의 기본 포트입니다.
+            subprocess.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860"])
+        else:
+            print("\n[INFO] 터미널(CLI) 모드로 실행합니다.")
+            asyncio.run(run_agent())

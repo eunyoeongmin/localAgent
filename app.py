@@ -1,5 +1,4 @@
 import sys
-import os
 import subprocess
 import importlib.util
 
@@ -10,8 +9,7 @@ except (ImportError, AttributeError):
     print("[INFO] ddgsパッケージが見つからないため、インストールを試行します...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
 
-import asyncio
-import subprocess as sp # spとしてエイリア스設定 (既存のsubprocessとの衝突防止)
+import subprocess as sp # spとしてエイリアス設定 (既存のsubprocessとの衝突防止)
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from config import chat_llm, tool_llm, SYSTEM_PROMPT

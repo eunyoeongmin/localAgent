@@ -84,7 +84,8 @@ async def generate_change_plan(user_request: str) -> str:
     return str(plan_response.content).strip()
 
 def extract_content(content) -> str:
-    if isinstance(content, str): return content
+    if isinstance(content, str):
+        return content
     if isinstance(content, list):
         return "".join([item['text'] if isinstance(item, dict) and 'text' in item else str(item) for item in content])
     return str(content)

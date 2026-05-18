@@ -9,7 +9,7 @@ load_dotenv()
 
 # [変更] Gemini APIキー設定 (環境変数値の前後空白除去)
 # Pythonは .strip() を使用します。
-raw_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
+raw_key = os.getenv("GOOGLE_API_KEY")
 GOOGLE_API_KEY = raw_key.strip() if raw_key else None
 
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
@@ -19,16 +19,16 @@ CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
-def create_llm(*, temperature: float):
-    # APIキーがあればGemini使用 (最新 3.1 Flash-Lite モデル適用)
-    if GOOGLE_API_KEY:
+def create_llm(*, temperature: float, provider: str = "auto"):
+    # API があって providerが "gemini"とか "auto"の場合は Gemini 使用を試みる
+    if GOOGLE_API_KEY and provider in ["auto", "gemini"]:
         return ChatGoogleGenerativeAI(
-            model="gemini-3.1-flash-lite", # 2026年最新正式モデル名
+            model="gemma-4-31b-it", 
             google_api_key=GOOGLE_API_KEY,
             temperature=temperature,
         )
 
-    # APIキーがなければローカルLLM使用
+    # その以外の場合は LM Studio を使用
     return ChatOpenAI(
         base_url=LM_STUDIO_BASE_URL,
         api_key=LM_STUDIO_API_KEY,

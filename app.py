@@ -12,10 +12,27 @@ except (ImportError, AttributeError):
 import subprocess as sp # spとしてエイリアス設定 (既存のsubprocessとの衝突防止)
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from config import chat_llm, tool_llm, SYSTEM_PROMPT
+from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, CHAT_TEMPERATURE, TOOL_TEMPERATURE
 from tools import all_tools
 
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
+
+async def safe_llm_call(llm_instance, messages, is_tool=False):
+    try:
+        return await llm_instance.ainvoke(messages)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if any(keyword in error_msg for keyword in ["google", "gemini", "401", "403", "500", "503", "connection"]):
+            await cl.Message(content="⚠️ [SYSTEMアラム] 現在の サーバーの状態が不安定であるか、接続できないため、再接続を試みます。しばらくお待ちください。").send()
+            
+            new_llm = create_llm(temperature=CHAT_TEMPERATURE if not is_tool else TOOL_TEMPERATURE, provider="local")
+            
+            if is_tool:
+                new_llm = new_llm.bind_tools(all_tools)
+            
+            return await new_llm.ainvoke(messages)
+        else:
+            raise e
 
 CHANGE_ACTION_KEYWORDS = [
     "修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"
@@ -201,18 +218,28 @@ async def main(message: cl.Message):
     tool_phase_completed = False
 
     while current_attempt < max_retries:
-        response = await tool_llm_with_tools.ainvoke(messages)
+        try:
+            # tool_llm_with_tools.ainvoke 대신 safe_llm_call 사용
+            response = await safe_llm_call(tool_llm_with_tools, messages, is_tool=True)
+        except Exception as e:
+            await cl.Message(content=f"❌ [시스템 에러] 연결에 최종적으로 실패했습니다: {str(e)}").send()
+            return
 
         if not response.tool_calls:
-            final_response = await generate_final_response(messages)
-            messages.append(final_response)
-            
-            # [修正] extract_content関数を使用して純粋なテキストのみを抽出
-            msg.content = extract_content(final_response.content)
-            await msg.update()
-            
-            tool_phase_completed = True
-            break
+            try:
+                # generate_final_response 대신 직접 safe_llm_call 사용
+                final_response = await safe_llm_call(chat_llm, messages, is_tool=False)
+                messages.append(final_response)
+                
+                # [修正] extract_content 함수를 사용하여 순수 텍스트만 추출
+                msg.content = extract_content(final_response.content)
+                await msg.update()
+                
+                tool_phase_completed = True
+                break
+            except Exception as e:
+                await cl.Message(content=f"❌ [시스템 에러] 응답 생성 실패: {str(e)}").send()
+                return
 
         messages.append(response)
 

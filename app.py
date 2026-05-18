@@ -1,7 +1,6 @@
 import sys
 import subprocess
 import importlib.util
-import os
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題解決のためのランタイムインストール
 try:

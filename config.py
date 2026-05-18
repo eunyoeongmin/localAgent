@@ -20,13 +20,14 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
 def create_llm(*, temperature: float, provider: str = "auto"):
-    # API があって providerが "gemini"とか "auto"の場合は Gemini 使用を試みる
+    # API 키가 있고 provider가 "gemini"이거나 "auto"인 경우 Gemini 사용 시도
     if GOOGLE_API_KEY and provider in ["auto", "gemini"]:
         return ChatGoogleGenerativeAI(
-            model="gemma-4-31b-it", 
+            model="gemini-3.1-flash-lite", 
             google_api_key=GOOGLE_API_KEY,
             temperature=temperature,
         )
+
 
     # その以外の場合は LM Studio を使用
     return ChatOpenAI(

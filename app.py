@@ -12,201 +12,118 @@ except (ImportError, AttributeError):
 import subprocess as sp # spとしてエイリアス設定 (既存のsubprocessとの衝突防止)
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, CHAT_TEMPERATURE, TOOL_TEMPERATURE
+from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, CHAT_TEMPERATURE, TOOL_TEMPERATURE, GOOGLE_API_KEY
 from tools import all_tools
 
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
-async def safe_llm_call(llm_instance, messages, is_tool=False):
+async def safe_llm_call(messages, is_tool=False):
+    """LLM 호출을 시도하고 실패 시 사용자에게 알림을 보냅니다."""
+    provider = cl.user_session.get("current_provider")
+    
+    if provider == "gemini":
+        llm_instance = chat_llm if not is_tool else tool_llm_with_tools
+    else:
+        llm_instance = create_llm(temperature=CHAT_TEMPERATURE if not is_tool else TOOL_TEMPERATURE, provider="local")
+        if is_tool:
+            llm_instance = llm_instance.bind_tools(all_tools)
+
     try:
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        error_msg = str(e).lower()
-        if any(keyword in error_msg for keyword in ["google", "gemini", "401", "403", "500", "503", "connection"]):
-            await cl.Message(content="⚠️ [SYSTEMアラム] 現在の サーバーの状態が不安定であるか、接続できないため、再接続を試みます。しばらくお待ちください。").send()
-            
-            new_llm = create_llm(temperature=CHAT_TEMPERATURE if not is_tool else TOOL_TEMPERATURE, provider="local")
-            
-            if is_tool:
-                new_llm = new_llm.bind_tools(all_tools)
-            
-            return await new_llm.ainvoke(messages)
-        else:
-            raise e
+        if provider == "gemini":
+            error_msg = str(e).lower()
+            if any(keyword in error_msg for keyword in ["google", "gemini", "401", "403", "429", "500", "503", "connection"]):
+                # 사용자 요청에 따른 에러 메시지 변경
+                await cl.Message(content="🚫 [Gemini 제한 알림] 현재 사용량이 많거나 연결에 문제가 발생했습니다. 잠시 후 재시도하거나 하단 버튼을 통해 '로컬 LLM'으로 모델을 변경해 주세요.").send()
+                
+                # 자동으로 전환하지 않고 사용자가 선택하도록 유도 (버튼 다시 띄우기)
+                await show_provider_selector()
+                raise e # 루프 중단을 위해 에러 발생 유지
+        raise e
 
-CHANGE_ACTION_KEYWORDS = [
-    "修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"
-]
+async def show_provider_selector():
+    """사용자가 LLM을 선택할 수 있는 버튼을 띄웁니다."""
+    actions = [
+        cl.Action(name="select_provider", value="gemini", label="✨ Gemini 3.1", description="Google Gemini 모델 사용"),
+        cl.Action(name="select_provider", value="local", label="🏠 Local LLM", description="로컬 모델(LM Studio 등) 사용")
+    ]
+    await cl.Message(content="사용하실 AI 모델을 선택해 주세요:", actions=actions).send()
 
-CODE_CONTEXT_KEYWORDS = [
-    "コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint",
-    ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"
-]
+@cl.action_callback("select_provider")
+async def on_action(action):
+    """모델 선택 버튼 클릭 시 처리"""
+    provider = action.value
+    cl.user_session.set("current_provider", provider)
+    
+    if provider == "gemini":
+        if not GOOGLE_API_KEY:
+            await cl.Message(content="❌ API 키가 설정되어 있지 않습니다. 로컬 모드로 유지합니다.").send()
+            cl.user_session.set("current_provider", "local")
+            return
+        await cl.Message(content="✨ Gemini 3.1 모델로 전환되었습니다.").send()
+    else:
+        await cl.Message(content="🏠 로컬 LLM 모드로 전환되었습니다.").send()
 
-
+CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
+CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
-
 
 def is_code_change_request(text: str) -> bool:
     lowered = text.lower()
-    has_change_action = any(keyword in lowered for keyword in CHANGE_ACTION_KEYWORDS)
-    has_code_context = any(keyword in lowered for keyword in CODE_CONTEXT_KEYWORDS)
-    return has_change_action and has_code_context
-
+    return any(k in lowered for k in CHANGE_ACTION_KEYWORDS) and any(k in lowered for k in CODE_CONTEXT_KEYWORDS)
 
 def is_approval(text: str) -> bool:
-    lowered = text.strip().lower()
-    return lowered in APPROVAL_WORDS
-
+    return text.strip().lower() in APPROVAL_WORDS
 
 async def generate_change_plan(user_request: str) -> str:
-    planner_system = (
-        "あなたはコード変更計画作成器です。 "
-        "ユーザーのリクエストを見て、ツール実行前に必要な作業を3〜7段階で日本語で作成してください。 "
-        "出力形式は必ず「計画」というタイトルと番号リストのみを使用し、実際の変更や実行は行わないでください。"
-    )
-    planner_messages = [
-        SystemMessage(content=planner_system),
-        HumanMessage(content=user_request),
-    ]
-    plan_response = await tool_llm.ainvoke(planner_messages)
+    planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を番号付きで作成してください。"), HumanMessage(content=user_request)]
+    plan_response = await safe_llm_call(planner_messages, is_tool=False)
     return str(plan_response.content).strip()
 
-
 async def generate_final_response(messages: list) -> AIMessage:
-    return await chat_llm.ainvoke(messages)
-
+    return await safe_llm_call(messages, is_tool=False)
 
 def extract_content(content) -> str:
-    """LLMの応答内容から純粋なテキストのみを抽出します。"""
-    if isinstance(content, str):
-        return content
+    if isinstance(content, str): return content
     if isinstance(content, list):
-        # リスト形式の応答（例：Gemini 3.1）の処理
-        text_parts = []
-        for item in content:
-            if isinstance(item, dict) and 'text' in item:
-                text_parts.append(item['text'])
-            elif isinstance(item, str):
-                text_parts.append(item)
-        return "".join(text_parts)
+        return "".join([item['text'] if isinstance(item, dict) and 'text' in item else str(item) for item in content])
     return str(content)
-
-
-# [変更] CLI用のメインループ関数をコメントアウト (Web GUI専用)
-# async def run_agent():
-#     DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が質問を解決するには不十分であるか、無効なデータである場合は、キーワードを具体的に変更して web_search ツールを再度呼び出してください。"
-#     messages = [SystemMessage(content=DYNAMIC_PROMPT)]
-#     pending_change_request = None
-#
-#     while True:
-#         query = input("👤 User: ")
-#         if query.lower() in ['exit', 'quit', 'q']:
-#             break
-#         if not query.strip():
-#             continue
-#
-#         if pending_change_request is not None:
-#             if is_approval(query):
-#                 approved_request = pending_change_request
-#                 pending_change_request = None
-#                 approval_note = (
-#                     "ユーザーが変更計画を承認しました。 "
-#                     "承認された範囲内でのみツールを使用して変更を実行してください。"
-#                 )
-#                 messages.append(HumanMessage(content=approval_note + f"\n元のリクエスト: {approved_request}"))
-#             else:
-#                 print("\n[システム] 計画がキャンセルされました。他のリクエストを入力してください。\n")
-#                 pending_change_request = None
-#                 continue
-#         elif is_code_change_request(query):
-#             plan_text = await generate_change_plan(query)
-#             print("\n[変更計画]\n" + plan_text)
-#             print("\n[システム] この計画通りに進める場合は「承認」と入力してください。キャンセルする場合は他の入力をしてください。\n")
-#             messages.append(HumanMessage(content=query))
-#             messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
-#             pending_change_request = query
-#             continue
-#         else:
-#             messages.append(HumanMessage(content=query))
-#
-#         max_retries = 3
-#         current_attempt = 0
-#         tool_phase_completed = False
-#
-#         while current_attempt < max_retries:
-#             response = await tool_llm_with_tools.ainvoke(messages)
-#
-#             if not response.tool_calls:
-#                 final_response = await generate_final_response(messages)
-#                 messages.append(final_response)
-#                 # [修正] extract_content関数を使用して純粋なテキストのみを抽出
-#                 content_str = extract_content(final_response.content)
-#                 print(f"\n{content_str}\n")
-#                 tool_phase_completed = True
-#                 break
-#
-#             messages.append(response)
-#
-#             for tool_call in response.tool_calls:
-#                 tool_name = tool_call['name']
-#                 tool_args = tool_call['args']
-#                 matched = next((t for t in all_tools if t.name == tool_name), None)
-#                 if matched:
-#                     result = await matched.ainvoke(tool_args)
-#                 else:
-#                     result = f"エラー：不明なツール（{tool_name}）です。"
-#                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
-#
-#             current_attempt += 1
-#
-#         if not tool_phase_completed and current_attempt == max_retries:
-#             print("\n[システム] 検索を数回試みましたが、完璧な情報を見つけることができませんでした。これまでの情報を基に回答を要約します。")
-#             final_fallback = await generate_final_response(messages)
-#             messages.append(final_fallback)
-#             print(f"{final_fallback.content}\n")
-
 
 @cl.on_chat_start
 async def start_chat():
-    """ウェブブラウザが更新されたり、初めて接続したときに実行（初期化）"""
-    DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が質問を解決するには不十分であるか、無効なデータである場合は、キーワードを具体的に変更して web_search ツールを再度呼び出してください。"
+    DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が不十分な場合はキーワードを変更して再検索してください。"
     cl.user_session.set("messages", [SystemMessage(content=DYNAMIC_PROMPT)])
     cl.user_session.set("pending_change_request", None)
-
+    
+    # 기본 프로바이더 설정
+    provider = "gemini" if GOOGLE_API_KEY else "local"
+    cl.user_session.set("current_provider", provider)
+    
+    await cl.Message(content=f"🚀 시스템이 시작되었습니다. (현재 모드: {'Gemini' if provider == 'gemini' else 'Local'})").send()
+    await show_provider_selector()
 
 @cl.on_message
 async def main(message: cl.Message):
-    """ユーザーがチャット欄にメッセージを入力するたびに実行"""
     query = message.content
-    
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
     if pending_change_request is not None:
         if is_approval(query):
-            approved_request = pending_change_request
+            messages.append(HumanMessage(content=f"ユーザーが計画を承認しました。\n元のリクエスト: {pending_change_request}"))
             cl.user_session.set("pending_change_request", None)
-            approval_note = (
-                "ユーザーが変更計画を承認しました。 "
-                "承認された範囲内でのみツールを使用して変更を実行してください。"
-            )
-            messages.append(HumanMessage(content=approval_note + f"\n元のリクエスト: {approved_request}"))
         else:
-            await cl.Message(content="\n[システム] 計画がキャンセルされました。他のリクエストを入力してください。\n").send()
+            await cl.Message(content="[システム] 計画がキャンセルされました。").send()
             cl.user_session.set("pending_change_request", None)
             return
-            
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        res_text = f"\n[変更計画]\n{plan_text}\n\n[システム] この計画通りに進める場合は「承認」と入力してください。キャンセルする場合は他の入力をしてください。"
-        await cl.Message(content=res_text).send()
-        
+        await cl.Message(content=f"[変更計画]\n{plan_text}\n\n「承認」と入力すると実行します。").send()
         messages.append(HumanMessage(content=query))
         messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
         return
-        
     else:
         messages.append(HumanMessage(content=query))
 
@@ -215,63 +132,27 @@ async def main(message: cl.Message):
 
     max_retries = 3
     current_attempt = 0
-    tool_phase_completed = False
-
     while current_attempt < max_retries:
         try:
-            # tool_llm_with_tools.ainvoke 대신 safe_llm_call 사용
-            response = await safe_llm_call(tool_llm_with_tools, messages, is_tool=True)
-        except Exception as e:
-            await cl.Message(content=f"❌ [시스템 에러] 연결에 최종적으로 실패했습니다: {str(e)}").send()
-            return
-
-        if not response.tool_calls:
-            try:
-                # generate_final_response 대신 직접 safe_llm_call 사용
-                final_response = await safe_llm_call(chat_llm, messages, is_tool=False)
+            response = await safe_llm_call(messages, is_tool=True)
+            if not response.tool_calls:
+                final_response = await generate_final_response(messages)
                 messages.append(final_response)
-                
-                # [修正] extract_content 함수를 사용하여 순수 텍스트만 추출
                 msg.content = extract_content(final_response.content)
                 await msg.update()
-                
-                tool_phase_completed = True
                 break
-            except Exception as e:
-                await cl.Message(content=f"❌ [시스템 에러] 응답 생성 실패: {str(e)}").send()
-                return
-
-        messages.append(response)
-
-        for tool_call in response.tool_calls:
-            tool_name = tool_call['name']
-            tool_args = tool_call['args']
-            matched = next((t for t in all_tools if t.name == tool_name), None)
             
-            if matched:
-                result = await matched.ainvoke(tool_args)
-            else:
-                result = f"エラー：不明なツール（{tool_name}）です。"
-                
-            messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
-
-        current_attempt += 1
-
-    if not tool_phase_completed and current_attempt == max_retries:
-        fallback_msg = "\n[システム] 検索を数回試みましたが、完璧な情報を見つけることができませんでした。これまでの情報を基に回答を要約します。\n\n"
-        final_fallback = await generate_final_response(messages)
-        messages.append(final_fallback)
-        
-        msg.content = fallback_msg + extract_content(final_fallback.content)
-        await msg.update()
+            messages.append(response)
+            for tool_call in response.tool_calls:
+                matched = next((t for t in all_tools if t.name == tool_call['name']), None)
+                result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
+                messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
+            current_attempt += 1
+        except Exception:
+            return # safe_llm_call에서 이미 메시지를 보냈으므로 중단
 
     cl.user_session.set("messages", messages)
 
-
-# [変更] Web GUI専用実行ロジック (CLIモード除去)
 if __name__ == "__main__":
     if "chainlit" not in sys.argv[0]:
-        print("\n[INFO] GUIモードを起動します... (Chainlit サーバー開始)")
-        # 7860ポートはHugging Face Spacesのデフォルトポートです。
-        # --host 0.0.0.0 を追加して外部接続を許可し、--headless でブラウザの実行を防止します。
         sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860", "--host", "0.0.0.0", "--headless"])

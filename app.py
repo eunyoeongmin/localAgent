@@ -126,7 +126,7 @@ async def start_chat():
     
     # 사이드바 상태 및 초기 메시지 설정
     await update_sidebar_status()
-    await cl.Message(content=f"🚀 **시스템이 준비되었습니다.**").send()
+    await cl.Message(content="🚀 **시스템이 준비되었습니다.**").send()
     await show_provider_selector()
 
 @cl.on_message

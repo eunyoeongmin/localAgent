@@ -7,8 +7,9 @@ from tools import all_tools
 load_dotenv()
 
 # Lemonade 서버 설정 (기본 포트 13305)
-LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://localhost:13305/api/v1")
-LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", "lemonade")
+# .env에 LEMONADE_ 관련 설정이 없으면 OPENAI_ 설정을 참조하도록 구성
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:13305/api/v1"))
+LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", os.getenv("OPENAI_API_KEY", "lemonade"))
 LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma4-it-e2b-FLM")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
@@ -16,8 +17,11 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 def create_llm(*, temperature: float):
     """Lemonade 서버 인스턴스를 생성합니다."""
+    # localhost 대신 127.0.0.1을 사용하여 IPv6 관련 연결 지연/오류 방지
+    base_url = LEMONADE_BASE_URL.replace("localhost", "127.0.0.1")
+    
     return ChatOpenAI(
-        base_url=LEMONADE_BASE_URL,
+        base_url=base_url,
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,

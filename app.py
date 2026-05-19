@@ -63,11 +63,44 @@ async def start_chat():
     cl.user_session.set("messages", [SystemMessage(content=DYNAMIC_PROMPT)])
     cl.user_session.set("pending_change_request", None)
 
+import base64
+
 @cl.on_message
 async def main(message: cl.Message):
     query = message.content
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
+
+    # [추가] 파일 업로드 처리
+    content_list = []
+    if query:
+        content_list.append({"type": "text", "text": query})
+
+    if message.elements:
+        for element in message.elements:
+            # 이미지 처리 (Vision)
+            if "image" in element.mime:
+                with open(element.path, "rb") as f:
+                    base64_image = base64.b64encode(f.read()).decode("utf-8")
+                content_list.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{element.mime};base64,{base64_image}"}
+                })
+            # 텍스트 파일 처리
+            elif "text" in element.mime or "json" in element.mime or "application/javascript" in element.mime:
+                with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
+                    file_content = f.read()
+                content_list.append({
+                    "type": "text", 
+                    "text": f"\n[첨부 파일: {element.name}]\n{file_content}"
+                })
+
+    # HumanMessage 생성 (멀티모달 대응)
+    if not content_list:
+        return
+    
+    # 텍스트만 있는 경우와 멀티모달(이미지 포함)인 경우 구분
+    human_msg = HumanMessage(content=content_list if any(c['type'] == 'image_url' for c in content_list) else query)
 
     if pending_change_request is not None:
         if is_approval(query):
@@ -80,12 +113,12 @@ async def main(message: cl.Message):
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
         await cl.Message(content=f"📋 **[변경 계획]**\n{plan_text}\n\n위 계획대로 진행하시겠습니까? '승인'을 입력해 주세요.").send()
-        messages.append(HumanMessage(content=query))
+        messages.append(human_msg)
         messages.append(AIMessage(content=f"[변경 계획]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
         return
     else:
-        messages.append(HumanMessage(content=query))
+        messages.append(human_msg)
 
     msg = cl.Message(content="")
     await msg.send()

@@ -39,11 +39,11 @@ CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", 
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
 
 def is_code_change_request(text: str) -> bool:
-    lowered = text.lower()
+    lowered = text.lower() if text else ""
     return any(k in lowered for k in CHANGE_ACTION_KEYWORDS) and any(k in lowered for k in CODE_CONTEXT_KEYWORDS)
 
 def is_approval(text: str) -> bool:
-    return text.strip().lower() in APPROVAL_WORDS
+    return text.strip().lower() in APPROVAL_WORDS if text else False
 
 async def generate_change_plan(user_request: str) -> str:
     planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を番号付きで作成してください。"), HumanMessage(content=user_request)]
@@ -70,7 +70,7 @@ async def main(message: cl.Message):
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
-    # ファイルアップロード処理
+    # [重要] content_listの構築
     content_list = []
     if query:
         content_list.append({"type": "text", "text": query})
@@ -94,14 +94,16 @@ async def main(message: cl.Message):
                     "text": f"\n[添付ファイル: {element.name}]\n{file_content}"
                 })
 
-    # HumanMessage生成 (マルチモーダル対応)
+    # HumanMessageの生成 (常に全コンテンツを反映)
     if not content_list:
         return
     
-    if len(content_list) > 1 or (content_list and content_list[0]['type'] == 'image_url'):
+    # 画像が含まれるか、複数の要素がある場合はリスト形式
+    if any(c['type'] == 'image_url' for c in content_list) or len(content_list) > 1:
         human_msg = HumanMessage(content=content_list)
     else:
-        human_msg = HumanMessage(content=query)
+        # テキスト1つのみの場合は文字列形式 (より一般的)
+        human_msg = HumanMessage(content=content_list[0]['text'])
 
     if pending_change_request is not None:
         if is_approval(query):
@@ -117,41 +119,49 @@ async def main(message: cl.Message):
         messages.append(human_msg)
         messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
+        cl.user_session.set("messages", messages) # ここで保存
         return
     else:
         messages.append(human_msg)
 
+    # 回答メッセージの枠を作成
     msg = cl.Message(content="")
     await msg.send()
 
-    max_retries = 3
+    max_retries = 5 # ツール呼び出しの深さを考慮して少し増加
     current_attempt = 0
     
     while current_attempt < max_retries:
         try:
-            # ツール呼び出しの有無を確認 (朝の安定ロジックに戻す)
+            # ツール呼び出しの有無を確認
             response = await safe_llm_call(messages, is_tool=True)
             
+            # ツール呼び出しがない場合は、この応答が最終回答
             if not response.tool_calls:
-                # 最終回答を取得
-                final_response = await safe_llm_call(messages, is_tool=False)
-                messages.append(final_response)
-                msg.content = extract_content(final_response.content)
+                messages.append(response)
+                msg.content = extract_content(response.content)
                 await msg.update()
                 break
             
-            # ツール呼び出しの場合の処理
+            # ツール呼び出しがある場合の処理
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
-                result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
+                if matched:
+                    result = await matched.ainvoke(tool_call['args'])
+                else:
+                    result = f"Error: Tool '{tool_call['name']}' not found."
+                
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
+            
             current_attempt += 1
         except Exception as e:
+            # エラー時もここまでの履歴を保存して復旧可能にする
+            cl.user_session.set("messages", messages)
             await cl.Message(content=f"❌ **[システムエラー]** 回答生成中にエラーが発生しました: {str(e)}").send()
             return
 
-    # セッションを確実に更新
+    # 最終的なメッセージ履歴をセッションに保存
     cl.user_session.set("messages", messages)
 
 if __name__ == "__main__":

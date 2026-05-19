@@ -21,12 +21,9 @@ tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
 async def safe_llm_call(messages, is_tool=False):
     """LLM呼び出しを試行し、失敗した場合はユーザーに通知します。"""
+    # ツール呼び出しの場合は事前に定義されたtool_llm_with_toolsを使用
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
     
-    # ツール呼び出しの場合はツールをバインド
-    if is_tool:
-        llm_instance = create_llm(temperature=TOOL_TEMPERATURE).bind_tools(all_tools)
-
     try:
         return await llm_instance.ainvoke(messages)
     except Exception as e:
@@ -70,7 +67,7 @@ async def main(message: cl.Message):
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
-    # [重要] content_listの構築
+    # content_listの構築
     content_list = []
     if query:
         content_list.append({"type": "text", "text": query})
@@ -94,15 +91,13 @@ async def main(message: cl.Message):
                     "text": f"\n[添付ファイル: {element.name}]\n{file_content}"
                 })
 
-    # HumanMessageの生成 (常に全コンテンツを反映)
+    # HumanMessageの生成
     if not content_list:
         return
     
-    # 画像が含まれるか、複数の要素がある場合はリスト形式
     if any(c['type'] == 'image_url' for c in content_list) or len(content_list) > 1:
         human_msg = HumanMessage(content=content_list)
     else:
-        # テキスト1つのみの場合は文字列形式 (より一般的)
         human_msg = HumanMessage(content=content_list[0]['text'])
 
     if pending_change_request is not None:
@@ -119,31 +114,36 @@ async def main(message: cl.Message):
         messages.append(human_msg)
         messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
-        cl.user_session.set("messages", messages) # ここで保存
+        cl.user_session.set("messages", messages)
         return
     else:
         messages.append(human_msg)
 
-    # 回答メッセージの枠を作成
+    # 回答用メッセージ（ストリーミング対応）
     msg = cl.Message(content="")
     await msg.send()
 
-    max_retries = 5 # ツール呼び出しの深さを考慮して少し増加
+    max_retries = 5
     current_attempt = 0
+    full_response_content = ""
     
     while current_attempt < max_retries:
         try:
-            # ツール呼び出しの有無を確認
+            # ツール呼び出しを確認 (invoke)
             response = await safe_llm_call(messages, is_tool=True)
             
-            # ツール呼び出しがない場合は、この応答が最終回答
             if not response.tool_calls:
-                messages.append(response)
-                msg.content = extract_content(response.content)
-                await msg.update()
+                # 最終回答はストリーミング (astream) で出力し、ウェブサーバーの切断を防止
+                async for chunk in chat_llm.astream(messages):
+                    if chunk.content:
+                        full_response_content += chunk.content
+                        await msg.stream_token(chunk.content)
+                
+                messages.append(AIMessage(content=full_response_content))
+                await msg.send()
                 break
             
-            # ツール呼び出しがある場合の処理
+            # ツール呼び出しの処理
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
@@ -156,12 +156,10 @@ async def main(message: cl.Message):
             
             current_attempt += 1
         except Exception as e:
-            # エラー時もここまでの履歴を保存して復旧可能にする
             cl.user_session.set("messages", messages)
             await cl.Message(content=f"❌ **[システムエラー]** 回答生成中にエラーが発生しました: {str(e)}").send()
             return
 
-    # 最終的なメッセージ履歴をセッションに保存
     cl.user_session.set("messages", messages)
 
 if __name__ == "__main__":

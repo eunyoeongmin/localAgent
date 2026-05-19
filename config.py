@@ -26,7 +26,7 @@ def create_llm(*, temperature: float):
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=120,
+        timeout=300,
         max_retries=2
     )
 

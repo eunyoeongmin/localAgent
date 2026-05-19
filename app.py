@@ -1,12 +1,13 @@
 import sys
 import subprocess
 import importlib.util
+import base64
 
-# [추가] Hugging Face 환경에서 ddgs 모듈을 찾지 못하는 문제 해결을 위한 런타임 설치
+# [追加] Hugging Face環境でddgsモジュールが見つからない問題を解決するためのランタイムインストール
 try:
     importlib.util.find_spec("ddgs")
 except (ImportError, AttributeError):
-    print("[INFO] ddgs 패키지가 없어 설치를 시도합니다...")
+    print("[INFO] ddgsパッケージがないため、インストールを試行します...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
 
 import subprocess as sp 
@@ -15,26 +16,26 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, TOOL_TEMPERATURE
 from tools import all_tools
 
-# 툴 바인딩
+# ツールバインディング
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
 async def safe_llm_call(messages, is_tool=False):
-    """LLM 호출을 시도하고 실패 시 사용자에게 알림을 보냅니다."""
+    """LLM呼び出しを試行し、失敗した場合はユーザーに通知します。"""
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
     
-    # 도구 호출인 경우 도구 바인딩
+    # ツール呼び出しの場合はツールをバインド
     if is_tool:
         llm_instance = create_llm(temperature=TOOL_TEMPERATURE).bind_tools(all_tools)
 
     try:
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        await cl.Message(content=f"❌ **[시스템 에러]** 모델 호출 중 오류가 발생했습니다: {str(e)}").send()
+        await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
         raise e
 
-# --- 기존 로직 유지 ---
-CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リ네임"]
-CODE_CONTEXT_KEYWORDS = ["코드", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
+# --- 既存のロジック維持 ---
+CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
+CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
 
 def is_code_change_request(text: str) -> bool:
@@ -45,7 +46,7 @@ def is_approval(text: str) -> bool:
     return text.strip().lower() in APPROVAL_WORDS
 
 async def generate_change_plan(user_request: str) -> str:
-    planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を번호付きで作成してください。"), HumanMessage(content=user_request)]
+    planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を番号付きで作成してください。"), HumanMessage(content=user_request)]
     plan_response = await safe_llm_call(planner_messages, is_tool=False)
     return str(plan_response.content).strip()
 
@@ -58,12 +59,10 @@ def extract_content(content) -> str:
 
 @cl.on_chat_start
 async def start_chat():
-    """채팅 시작 시 초기화"""
+    """チャット開始時の初期化"""
     DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が不十分な場合はキーワードを変更して再検索してください。"
     cl.user_session.set("messages", [SystemMessage(content=DYNAMIC_PROMPT)])
     cl.user_session.set("pending_change_request", None)
-
-import base64
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -71,14 +70,14 @@ async def main(message: cl.Message):
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
-    # [추가] 파일 업로드 처리
+    # [追加] ファイルアップロード処理
     content_list = []
     if query:
         content_list.append({"type": "text", "text": query})
 
     if message.elements:
         for element in message.elements:
-            # 이미지 처리 (Vision)
+            # 画像処理 (Vision)
             if "image" in element.mime:
                 with open(element.path, "rb") as f:
                     base64_image = base64.b64encode(f.read()).decode("utf-8")
@@ -86,35 +85,35 @@ async def main(message: cl.Message):
                     "type": "image_url",
                     "image_url": {"url": f"data:{element.mime};base64,{base64_image}"}
                 })
-            # 텍스트 파일 처리
+            # テキストファイル処理
             elif "text" in element.mime or "json" in element.mime or "application/javascript" in element.mime:
                 with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
                     file_content = f.read()
                 content_list.append({
                     "type": "text", 
-                    "text": f"\n[첨부 파일: {element.name}]\n{file_content}"
+                    "text": f"\n[添付ファイル: {element.name}]\n{file_content}"
                 })
 
-    # HumanMessage 생성 (멀티모달 대응)
+    # HumanMessage生成 (マルチモーダル対応)
     if not content_list:
         return
     
-    # 텍스트만 있는 경우와 멀티모달(이미지 포함)인 경우 구분
+    # テキストのみの場合とマルチモーダル（画像含む）の場合を区別
     human_msg = HumanMessage(content=content_list if any(c['type'] == 'image_url' for c in content_list) else query)
 
     if pending_change_request is not None:
         if is_approval(query):
-            messages.append(HumanMessage(content=f"사용자가 계획을 승인했습니다.\n元のリクエスト: {pending_change_request}"))
+            messages.append(HumanMessage(content=f"ユーザーが計画を承認しました。\n元のリクエスト: {pending_change_request}"))
             cl.user_session.set("pending_change_request", None)
         else:
-            await cl.Message(content="[시스템] 계획이 취소되었습니다.").send()
+            await cl.Message(content="[システム] 計画がキャンセルされました。").send()
             cl.user_session.set("pending_change_request", None)
             return
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        await cl.Message(content=f"📋 **[변경 계획]**\n{plan_text}\n\n위 계획대로 진행하시겠습니까? '승인'을 입력해 주세요.").send()
+        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか？ '承認'と入力してください。").send()
         messages.append(human_msg)
-        messages.append(AIMessage(content=f"[변경 계획]\n{plan_text}"))
+        messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
         return
     else:
@@ -125,23 +124,33 @@ async def main(message: cl.Message):
 
     max_retries = 3
     current_attempt = 0
+    full_response_content = ""
+    
     while current_attempt < max_retries:
         try:
+            # ツール呼び出しの有無を確認 (ツール呼び出しはストリーミングしない)
             response = await safe_llm_call(messages, is_tool=True)
+            
             if not response.tool_calls:
-                final_response = await safe_llm_call(messages, is_tool=False)
-                messages.append(final_response)
-                msg.content = extract_content(final_response.content)
-                await msg.update()
+                # 最終回答の場合はストリーミングで出力
+                async for chunk in chat_llm.astream(messages):
+                    if chunk.content:
+                        full_response_content += chunk.content
+                        await msg.stream_token(chunk.content)
+                
+                messages.append(AIMessage(content=full_response_content))
+                await msg.send()
                 break
             
+            # ツール呼び出しの場合の処理
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
                 result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
             current_attempt += 1
-        except Exception:
+        except Exception as e:
+            await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
             return
 
     cl.user_session.set("messages", messages)

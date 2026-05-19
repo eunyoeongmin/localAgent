@@ -22,14 +22,14 @@ async def safe_llm_call(messages, is_tool=False):
     """LLM 호출을 시도하고 실패 시 사용자에게 알림을 보냅니다."""
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
     
-    # 도구 호출인 경우 로컬 모델에 도구 바인딩
+    # 도구 호출인 경우 도구 바인딩
     if is_tool:
-        llm_instance = create_llm(temperature=TOOL_TEMPERATURE, provider="local").bind_tools(all_tools)
+        llm_instance = create_llm(temperature=TOOL_TEMPERATURE).bind_tools(all_tools)
 
     try:
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        await cl.Message(content=f"❌ **[로컬 에러]** 모델 호출 중 오류가 발생했습니다: {str(e)}").send()
+        await cl.Message(content=f"❌ **[시스템 에러]** 모델 호출 중 오류가 발생했습니다: {str(e)}").send()
         raise e
 
 # --- 기존 로직 유지 ---

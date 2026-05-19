@@ -6,21 +6,23 @@ from tools import all_tools
 
 load_dotenv()
 
-LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:13305/api/v1")
-LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
-LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "gemma4-it-e2b-FLM")
+# Lemonade 서버 설정 (기본 포트 13305)
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://localhost:13305/api/v1")
+LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", "lemonade")
+LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma4-it-e2b-FLM")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
-def create_llm(*, temperature: float, provider: str = "local"):
+def create_llm(*, temperature: float):
+    """Lemonade 서버 인스턴스를 생성합니다."""
     return ChatOpenAI(
-        base_url=LM_STUDIO_BASE_URL,
-        api_key=LM_STUDIO_API_KEY,
-        model=LM_STUDIO_MODEL,
+        base_url=LEMONADE_BASE_URL,
+        api_key=LEMONADE_API_KEY,
+        model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=120, # 타임아웃 120초로 증가
+        timeout=120,
         max_retries=2
     )
 

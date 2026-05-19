@@ -17,8 +17,7 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # localhostの代わりに127.0.0.1を使用してIPv6関連の接続遅延/エラーを防止
-    base_url = LEMONADE_BASE_URL.replace("localhost", "127.0.0.1")
+    base_url = LEMONADE_BASE_URL
     
     return ChatOpenAI(
         base_url=base_url,

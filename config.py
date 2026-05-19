@@ -25,7 +25,11 @@ def create_llm(*, temperature: float):
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,
-        default_headers={"ngrok-skip-browser-warning": "true"},
+        default_headers={
+            "ngrok-skip-browser-warning": "true",
+            "Connection": "close"
+        },
+        
         timeout=300,
         max_retries=2
     )

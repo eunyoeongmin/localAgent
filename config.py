@@ -7,14 +7,13 @@ from tools import all_tools
 
 load_dotenv()
 
-# [変更] Gemini APIキー設定 (環境変数値の前後空白除去)
-# Pythonは .strip() を使用します。
-raw_key = os.getenv("GOOGLE_API_KEY")
+# [変更] Gemini APIキー設定
+raw_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
 GOOGLE_API_KEY = raw_key.strip() if raw_key else None
 
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:13305/api/v1")
 LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
-LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "local-model")
+LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "gemma4-it-e2b-FLM")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 

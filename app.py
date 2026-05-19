@@ -94,12 +94,14 @@ async def main(message: cl.Message):
                     "text": f"\n[添付ファイル: {element.name}]\n{file_content}"
                 })
 
-    # HumanMessage生成 (マルチモーダル対応)
+    # HumanMessage生成 (マルチモーダル対応: 添付があればリスト、なければ文字列)
     if not content_list:
         return
     
-    # テキストのみの場合とマルチモーダル（画像含む）の場合を区別
-    human_msg = HumanMessage(content=content_list if any(c['type'] == 'image_url' for c in content_list) else query)
+    if len(content_list) > 1 or (content_list and content_list[0]['type'] == 'image_url'):
+        human_msg = HumanMessage(content=content_list)
+    else:
+        human_msg = HumanMessage(content=query)
 
     if pending_change_request is not None:
         if is_approval(query):

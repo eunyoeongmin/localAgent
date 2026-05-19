@@ -12,7 +12,7 @@ except (ImportError, AttributeError):
 import subprocess as sp 
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, CHAT_TEMPERATURE, TOOL_TEMPERATURE
+from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, TOOL_TEMPERATURE
 from tools import all_tools
 
 # 툴 바인딩

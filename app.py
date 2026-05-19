@@ -18,13 +18,33 @@ from tools import all_tools
 # 툴 바인딩
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
+async def update_sidebar_status():
+    """사이드바에 현재 선택된 모델 정보를 표시합니다."""
+    provider = cl.user_session.get("current_provider", "gemini")
+    
+    status_html = f"""
+    <div style="padding: 15px; border-radius: 10px; background-color: {'#1a237e' if provider == 'gemini' else '#1b5e20'}; color: white; margin-bottom: 10px;">
+        <h3 style="margin: 0; font-size: 16px;">🤖 현재 모델</h3>
+        <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px;">
+            {'✨ Gemini 3.1' if provider == 'gemini' else '🏠 Local (Gemma 4)'}
+        </p>
+    </div>
+    <div style="font-size: 13px; color: #666;">
+        <p>위 모델이 모든 답변을 생성합니다.</p>
+    </div>
+    """
+    
+    # 사이드바 엘리먼트 설정 (cl.Text를 사용하여 사이드바에 고정)
+    status_element = cl.Text(name="상태 정보", content=status_html, display="side")
+    await cl.Message(content="시스템 상태 정보가 업데이트되었습니다.", elements=[status_element]).send()
+
 async def show_provider_selector():
     """사용자가 LLM을 선택할 수 있는 버튼을 띄웁니다."""
     actions = [
         cl.Action(name="select_provider", value="gemini", label="✨ Gemini 3.1", description="Google Gemini 모델 사용", payload={}),
         cl.Action(name="select_provider", value="local", label="🏠 Local LLM", description="로컬 모델(LM Studio 등) 사용", payload={})
     ]
-    await cl.Message(content="🤖 **사용하실 AI 모델을 선택해 주세요:**", actions=actions).send()
+    await cl.Message(content="🔄 **AI 모델을 변경하시겠습니까?**", actions=actions).send()
 
 async def safe_llm_call(messages, is_tool=False):
     """LLM 호출을 시도하고 실패 시 사용자에게 알림을 보냅니다."""
@@ -34,6 +54,7 @@ async def safe_llm_call(messages, is_tool=False):
         provider = "gemini" if GOOGLE_API_KEY else "local"
         cl.user_session.set("current_provider", provider)
     
+    # LLM 인스턴스 생성 (매번 provider 확인)
     if provider == "gemini":
         llm_instance = chat_llm if not is_tool else tool_llm_with_tools
     else:
@@ -65,6 +86,9 @@ async def on_action(action):
         await cl.Message(content="✅ **Gemini 3.1** 모델로 전환되었습니다. 이제부터 Gemini가 답변합니다.").send()
     else:
         await cl.Message(content="✅ **로컬 LLM** 모드로 전환되었습니다. 이제부터 내 컴퓨터의 모델이 답변합니다.").send()
+    
+    # 사이드바 상태 업데이트
+    await update_sidebar_status()
 
 # --- 기존 로직 유지 ---
 CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
@@ -100,7 +124,9 @@ async def start_chat():
     provider = "gemini" if GOOGLE_API_KEY else "local"
     cl.user_session.set("current_provider", provider)
     
-    await cl.Message(content=f"🚀 **시스템이 준비되었습니다.** (기본 모드: {'Gemini' if provider == 'gemini' else 'Local'})").send()
+    # 사이드바 상태 및 초기 메시지 설정
+    await update_sidebar_status()
+    await cl.Message(content=f"🚀 **시스템이 준비되었습니다.**").send()
     await show_provider_selector()
 
 @cl.on_message
@@ -111,10 +137,10 @@ async def main(message: cl.Message):
 
     if pending_change_request is not None:
         if is_approval(query):
-            messages.append(HumanMessage(content=f"ユーザーが計画を承認しました。\n元のリクエスト: {pending_change_request}"))
+            messages.append(HumanMessage(content=f"ユーザー가 계획을 승인했습니다.\n元のリクエスト: {pending_change_request}"))
             cl.user_session.set("pending_change_request", None)
         else:
-            await cl.Message(content="[시스템] 計画がキャンセルされました。").send()
+            await cl.Message(content="[시스템] 계획이 취소되었습니다.").send()
             cl.user_session.set("pending_change_request", None)
             return
     elif is_code_change_request(query):

@@ -20,15 +20,13 @@ tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
 async def safe_llm_call(messages, is_tool=False):
     """LLM呼び出しを試行し、失敗した場合はユーザーに通知します。"""
+    # config.pyで既に生成されたインスタンスを再利用
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
-
-    # ツール呼び出しの場合はツールをバインド
-    if is_tool:
-        llm_instance = create_llm(temperature=TOOL_TEMPERATURE).bind_tools(all_tools)
 
     try:
         return await llm_instance.ainvoke(messages)
     except Exception as e:
+        print(f"[DEBUG] Connection Retry Failed: {str(e)}")
         await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
         raise e
 

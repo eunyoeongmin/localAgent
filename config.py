@@ -21,8 +21,14 @@ def create_llm(*, temperature: float):
     # URL末尾のスラッシュを削除して接続エラーを防止
     base_url = LEMONADE_BASE_URL.strip().rstrip("/")
 
-    # 接続の安定性のためにKeep-Aliveを無効化
+    # 接続の安定性のためにKeep-Aliveを無効化し、タイムアウトを精緻化
     limits = httpx.Limits(max_keepalive_connections=0, max_connections=10)
+    timeout_config = httpx.Timeout(
+        connect=10.0,
+        read=120.0,
+        write=10.0,
+        pool=None
+    )
 
     return ChatOpenAI(
         base_url=base_url,
@@ -30,8 +36,8 @@ def create_llm(*, temperature: float):
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=300,
-        max_retries=2,
+        timeout=timeout_config,
+        max_retries=5,
         http_client=httpx.Client(limits=limits),
         http_async_client=httpx.AsyncClient(limits=limits)
     )

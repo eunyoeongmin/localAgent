@@ -1,7 +1,6 @@
 import sys
 import subprocess
 import importlib.util
-import base64
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題を解決するためのランタイムインストール
 try:
@@ -10,14 +9,28 @@ except (ImportError, AttributeError):
     print("[INFO] ddgsパッケージがないため、インストールを試行します...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
 
-import subprocess as sp 
+import subprocess as sp
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from config import chat_llm, tool_llm, SYSTEM_PROMPT
+from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, TOOL_TEMPERATURE
 from tools import all_tools
 
-# ツールバインディング (tool_llmを使用)
+# ツールバインディング
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
+
+async def safe_llm_call(messages, is_tool=False):
+    """LLM呼び出しを試行し、失敗した場合はユーザーに通知します。"""
+    llm_instance = chat_llm if not is_tool else tool_llm_with_tools
+
+    # ツール呼び出しの場合はツールをバインド
+    if is_tool:
+        llm_instance = create_llm(temperature=TOOL_TEMPERATURE).bind_tools(all_tools)
+
+    try:
+        return await llm_instance.ainvoke(messages)
+    except Exception as e:
+        await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
+        raise e
 
 # --- 既存のロジック維持 (UI日本語) ---
 CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
@@ -30,6 +43,11 @@ def is_code_change_request(text: str) -> bool:
 
 def is_approval(text: str) -> bool:
     return text.strip().lower() in APPROVAL_WORDS if text else False
+
+async def generate_change_plan(user_request: str) -> str:
+    planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を番号付きで作成してください。"), HumanMessage(content=user_request)]
+    plan_response = await safe_llm_call(planner_messages, is_tool=False)
+    return str(plan_response.content).strip()
 
 def extract_content(content) -> str:
     if isinstance(content, str):
@@ -50,37 +68,6 @@ async def main(message: cl.Message):
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
-    # [改善] 安定したメッセージ構築: 全てのテキストを一つに統合
-    texts = [query] if query else []
-    images = []
-
-    if message.elements:
-        for element in message.elements:
-            if "image" in element.mime:
-                with open(element.path, "rb") as f:
-                    base64_image = base64.b64encode(f.read()).decode("utf-8")
-                images.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{element.mime};base64,{base64_image}"}
-                })
-            elif any(ext in element.mime for ext in ["text", "json", "javascript"]):
-                with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
-                    texts.append(f"\n[添付ファイル: {element.name}]\n{f.read()}")
-
-    # 最終的なコンテンツリスト構築
-    combined_text = "\n".join(texts)
-    content = []
-    if combined_text:
-        content.append({"type": "text", "text": combined_text})
-    content.extend(images)
-
-    if not content:
-        return
-
-    # HumanMessageの生成
-    human_msg = HumanMessage(content=content if images else combined_text)
-
-    # 計画承認プロセスの処理
     if pending_change_request is not None:
         if is_approval(query):
             messages.append(HumanMessage(content=f"ユーザーが計画を承認しました。\n元のリクエスト: {pending_change_request}"))
@@ -90,68 +77,38 @@ async def main(message: cl.Message):
             cl.user_session.set("pending_change_request", None)
             return
     elif is_code_change_request(query):
-        # 計画生成時は簡略化のためchat_llmを使用
-        planner_msgs = [SystemMessage(content="あなたは計画作成器です。手順を番号付きで作成してください。"), human_msg]
-        plan_resp = await chat_llm.ainvoke(planner_msgs)
-        plan_text = str(plan_resp.content).strip()
-        
-        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか？ '承認'と入力してください。").send()
-        messages.append(human_msg)
+        plan_text = await generate_change_plan(query)
+        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか？ '承認'と入力してください。").send()   
+        messages.append(HumanMessage(content=query))
         messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
-        cl.user_session.set("messages", messages)
         return
     else:
-        messages.append(human_msg)
+        messages.append(HumanMessage(content=query))
 
-    # 回答生成 (ストリーミング形式で開始)
     msg = cl.Message(content="")
     await msg.send()
 
-    max_turns = 5
-    for _ in range(max_turns):
+    max_retries = 3
+    current_attempt = 0
+    while current_attempt < max_retries:
         try:
-            # [重要] 呼び出しを1回に統合。tool_llm_with_toolsはツールがなければ普通の回答を返す。
-            full_content = ""
-            async for chunk in tool_llm_with_tools.astream(messages):
-                if chunk.content:
-                    full_content += chunk.content
-                    await msg.stream_token(chunk.content)
-                
-                # ツール呼び出しが含まれている場合はストリーミングを中断して一括処理へ移行
-                if hasattr(chunk, 'tool_call_chunks') and chunk.tool_call_chunks:
-                    # ストリーミングを停止し、ainvokeでツール呼び出しの全容を取得
-                    response = await tool_llm_with_tools.ainvoke(messages)
-                    break
-            else:
-                # 正常にストリーミングが完了（ツール呼び出しなし）
-                response = AIMessage(content=full_content)
-            
-            # ツール呼び出しがない場合は終了
+            response = await safe_llm_call(messages, is_tool=True)
             if not response.tool_calls:
-                messages.append(response)
-                await msg.send()
+                final_response = await safe_llm_call(messages, is_tool=False)
+                messages.append(final_response)
+                msg.content = extract_content(final_response.content)
+                await msg.update()
                 break
-            
-            # ツール呼び出しがある場合の処理
+
             messages.append(response)
             for tool_call in response.tool_calls:
-                tool_msg = cl.Message(content=f"🔧 ツール実行中: {tool_call['name']}...")
-                await tool_msg.send()
-                
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
-                if matched:
-                    result = await matched.ainvoke(tool_call['args'])
-                else:
-                    result = f"Error: Tool '{tool_call['name']}' not found."
-                
+                result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
-                tool_msg.content = f"✅ ツール完了: {tool_call['name']}"
-                await tool_msg.update()
-                
-        except Exception as e:
-            await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
-            break
+            current_attempt += 1
+        except Exception:
+            return
 
     cl.user_session.set("messages", messages)
 

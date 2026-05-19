@@ -12,7 +12,7 @@ load_dotenv()
 raw_key = os.getenv("GOOGLE_API_KEY")
 GOOGLE_API_KEY = raw_key.strip() if raw_key else None
 
-LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:13305/api/v1")
 LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "local-model")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))

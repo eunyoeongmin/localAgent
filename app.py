@@ -21,8 +21,8 @@ tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 async def show_provider_selector():
     """사용자가 LLM을 선택할 수 있는 버튼을 띄웁니다."""
     actions = [
-        cl.Action(name="select_provider", value="gemini", label="✨ Gemini 3.1", description="Google Gemini 모델 사용"),
-        cl.Action(name="select_provider", value="local", label="🏠 Local LLM", description="로컬 모델(LM Studio 등) 사용")
+        cl.Action(name="select_provider", value="gemini", label="✨ Gemini 3.1", description="Google Gemini 모델 사용", payload={}),
+        cl.Action(name="select_provider", value="local", label="🏠 Local LLM", description="로컬 모델(LM Studio 등) 사용", payload={})
     ]
     await cl.Message(content="🤖 **사용하실 AI 모델을 선택해 주세요:**", actions=actions).send()
 

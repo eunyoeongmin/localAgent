@@ -19,6 +19,7 @@ def create_llm(*, temperature: float, provider: str = "local"):
         api_key=LM_STUDIO_API_KEY,
         model=LM_STUDIO_MODEL,
         temperature=temperature,
+        default_headers={"ngrok-skip-browser-warning": "true"}
     )
 
 

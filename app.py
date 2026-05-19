@@ -68,7 +68,6 @@ async def main(message: cl.Message):
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
-    # 🚨 [복구 및 개선 완료] 파일 읽기 및 2000자 글자 수 제한 로직
     texts = [query] if query else []
     images = []
 
@@ -85,13 +84,11 @@ async def main(message: cl.Message):
             elif any(ext in element.mime for ext in ["text", "json", "javascript", "python"]):
                 with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
                     file_content = f.read()
-                    # ⭐ NPU 생존을 위한 2000자 컷 로직!
                     max_chars = 2000
                     if len(file_content) > max_chars:
                         file_content = file_content[:max_chars] + f"\n\n...[内容が長すぎるため、{max_chars}文字でカットされました]..."
                     texts.append(f"\n[添付ファイル: {element.name}]\n{file_content}")
 
-    # 최종 텍스트 조립
     combined_text = "\n".join(texts)
     content = []
     if combined_text:
@@ -101,8 +98,12 @@ async def main(message: cl.Message):
     if not content:
         return
 
-    # HumanMessage 생성 (이미지가 있으면 리스트형, 없으면 텍스트형)
     human_msg = HumanMessage(content=content if images else combined_text)
+
+    for i in range(len(messages)):
+        if isinstance(messages[i], HumanMessage) and isinstance(messages[i].content, list):
+            text_only = "".join([item["text"] for item in messages[i].content if item.get("type") == "text"])
+            messages[i] = HumanMessage(content=text_only + "\n[過去の画像はメモリ最適化のため削除されました]")
 
     if pending_change_request is not None:
         if is_approval(query):

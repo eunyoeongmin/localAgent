@@ -2,96 +2,38 @@ import sys
 import subprocess
 import importlib.util
 
-# [追加] Hugging Face環境でddgsモジュールが見つからない問題解決のためのランタイムインストール
+# [추가] Hugging Face 환경에서 ddgs 모듈을 찾지 못하는 문제 해결을 위한 런타임 설치
 try:
     importlib.util.find_spec("ddgs")
 except (ImportError, AttributeError):
-    print("[INFO] ddgsパッケージが見つからないため、インストールを試行します...")
+    print("[INFO] ddgs 패키지가 없어 설치를 시도합니다...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "duckduckgo-search"])
 
 import subprocess as sp 
 import chainlit as cl
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, CHAT_TEMPERATURE, TOOL_TEMPERATURE, GOOGLE_API_KEY
+from config import chat_llm, tool_llm, SYSTEM_PROMPT, create_llm, CHAT_TEMPERATURE, TOOL_TEMPERATURE
 from tools import all_tools
 
 # 툴 바인딩
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
-async def update_sidebar_status():
-    """사이드바에 현재 선택된 모델 정보를 표시합니다."""
-    provider = cl.user_session.get("current_provider", "gemini")
-    
-    status_html = f"""
-    <div style="padding: 15px; border-radius: 10px; background-color: {'#1a237e' if provider == 'gemini' else '#1b5e20'}; color: white; margin-bottom: 10px;">
-        <h3 style="margin: 0; font-size: 16px;">🤖 현재 모델</h3>
-        <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 18px;">
-            {'✨ Gemini 3.1' if provider == 'gemini' else '🏠 Local (Gemma 4)'}
-        </p>
-    </div>
-    <div style="font-size: 13px; color: #666;">
-        <p>위 모델이 모든 답변을 생성합니다.</p>
-    </div>
-    """
-    
-    # 사이드바 엘리먼트 설정 (cl.Text를 사용하여 사이드바에 고정)
-    status_element = cl.Text(name="상태 정보", content=status_html, display="side")
-    await cl.Message(content="시스템 상태 정보가 업데이트되었습니다.", elements=[status_element]).send()
-
-async def show_provider_selector():
-    """사용자가 LLM을 선택할 수 있는 버튼을 띄웁니다."""
-    actions = [
-        cl.Action(name="select_provider", value="gemini", label="✨ Gemini 3.1", description="Google Gemini 모델 사용", payload={}),
-        cl.Action(name="select_provider", value="local", label="🏠 Local LLM", description="로컬 모델(LM Studio 등) 사용", payload={})
-    ]
-    await cl.Message(content="🔄 **AI 모델을 변경하시겠습니까?**", actions=actions).send()
-
 async def safe_llm_call(messages, is_tool=False):
     """LLM 호출을 시도하고 실패 시 사용자에게 알림을 보냅니다."""
-    # 세션에서 현재 프로바이더 가져오기 (없으면 기본값 설정)
-    provider = cl.user_session.get("current_provider")
-    if not provider:
-        provider = "gemini" if GOOGLE_API_KEY else "local"
-        cl.user_session.set("current_provider", provider)
+    llm_instance = chat_llm if not is_tool else tool_llm_with_tools
     
-    # LLM 인스턴스 생성 (매번 provider 확인)
-    if provider == "gemini":
-        llm_instance = chat_llm if not is_tool else tool_llm_with_tools
-    else:
-        llm_instance = create_llm(temperature=CHAT_TEMPERATURE if not is_tool else TOOL_TEMPERATURE, provider="local")
-        if is_tool:
-            llm_instance = llm_instance.bind_tools(all_tools)
+    # 도구 호출인 경우 로컬 모델에 도구 바인딩
+    if is_tool:
+        llm_instance = create_llm(temperature=TOOL_TEMPERATURE, provider="local").bind_tools(all_tools)
 
     try:
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        error_msg = str(e).lower()
-        if provider == "gemini" and any(keyword in error_msg for keyword in ["google", "gemini", "401", "403", "429", "500", "503", "connection"]):
-            await cl.Message(content="🚫 **[Gemini 제한 알림]** 현재 서비스 이용이 원활하지 않습니다. 잠시 후 다시 시도하시거나 아래 버튼으로 모델을 변경해 주세요.").send()
-            await show_provider_selector()
-            raise e
+        await cl.Message(content=f"❌ **[로컬 에러]** 모델 호출 중 오류가 발생했습니다: {str(e)}").send()
         raise e
 
-@cl.action_callback("select_provider")
-async def on_action(action):
-    """모델 선택 버튼 클릭 시 처리"""
-    provider = action.value
-    cl.user_session.set("current_provider", provider)
-    
-    if provider == "gemini":
-        if not GOOGLE_API_KEY:
-            await cl.Message(content="❌ API 키가 설정되어 있지 않아 Gemini를 사용할 수 없습니다. 로컬 모드로 유지합니다.").send()
-            cl.user_session.set("current_provider", "local")
-            return
-        await cl.Message(content="✅ **Gemini 3.1** 모델로 전환되었습니다. 이제부터 Gemini가 답변합니다.").send()
-    else:
-        await cl.Message(content="✅ **로컬 LLM** 모드로 전환되었습니다. 이제부터 내 컴퓨터의 모델이 답변합니다.").send()
-    
-    # 사이드바 상태 업데이트
-    await update_sidebar_status()
-
 # --- 기존 로직 유지 ---
-CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
+CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リ네임"]
 CODE_CONTEXT_KEYWORDS = ["코드", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
 
@@ -103,7 +45,7 @@ def is_approval(text: str) -> bool:
     return text.strip().lower() in APPROVAL_WORDS
 
 async def generate_change_plan(user_request: str) -> str:
-    planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を番号付きで作成してください。"), HumanMessage(content=user_request)]
+    planner_messages = [SystemMessage(content="あなたは計画作成器です。手順を번호付きで作成してください。"), HumanMessage(content=user_request)]
     plan_response = await safe_llm_call(planner_messages, is_tool=False)
     return str(plan_response.content).strip()
 
@@ -120,14 +62,6 @@ async def start_chat():
     DYNAMIC_PROMPT = SYSTEM_PROMPT + "\n[重要] 検索結果が不十分な場合はキーワードを変更して再検索してください。"
     cl.user_session.set("messages", [SystemMessage(content=DYNAMIC_PROMPT)])
     cl.user_session.set("pending_change_request", None)
-    
-    provider = "gemini" if GOOGLE_API_KEY else "local"
-    cl.user_session.set("current_provider", provider)
-    
-    # 사이드바 상태 및 초기 메시지 설정
-    await update_sidebar_status()
-    await cl.Message(content="🚀 **시스템이 준비되었습니다.**").send()
-    await show_provider_selector()
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -137,7 +71,7 @@ async def main(message: cl.Message):
 
     if pending_change_request is not None:
         if is_approval(query):
-            messages.append(HumanMessage(content=f"ユーザー가 계획을 승인했습니다.\n元のリクエスト: {pending_change_request}"))
+            messages.append(HumanMessage(content=f"사용자가 계획을 승인했습니다.\n元のリクエスト: {pending_change_request}"))
             cl.user_session.set("pending_change_request", None)
         else:
             await cl.Message(content="[시스템] 계획이 취소되었습니다.").send()
@@ -175,7 +109,6 @@ async def main(message: cl.Message):
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
             current_attempt += 1
         except Exception:
-            # safe_llm_call에서 이미 에러 메시지를 보냈음
             return
 
     cl.user_session.set("messages", messages)

@@ -2,14 +2,9 @@ import os
 import datetime
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
 from tools import all_tools
 
 load_dotenv()
-
-# [変更] Gemini APIキー設定
-raw_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_BASE_URL")
-GOOGLE_API_KEY = raw_key.strip() if raw_key else None
 
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:13305/api/v1")
 LM_STUDIO_API_KEY = os.getenv("LM_STUDIO_API_KEY", "lm-studio")
@@ -18,17 +13,7 @@ CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 
-def create_llm(*, temperature: float, provider: str = "auto"):
-    # API 키가 있고 provider가 "gemini"이거나 "auto"인 경우 Gemini 사용 시도
-    if GOOGLE_API_KEY and provider in ["auto", "gemini"]:
-        return ChatGoogleGenerativeAI(
-            model="gemini-3.1-flash-lite", 
-            google_api_key=GOOGLE_API_KEY,
-            temperature=temperature,
-        )
-
-
-    # その以外の場合は LM Studio を使用
+def create_llm(*, temperature: float, provider: str = "local"):
     return ChatOpenAI(
         base_url=LM_STUDIO_BASE_URL,
         api_key=LM_STUDIO_API_KEY,
@@ -63,11 +48,11 @@ SYSTEM_PROMPT = f"""あなたは2026年型の最高級自律型エージェン�
    - 検索ツール使用時に「今日」、「最新」、「今年」という言葉があれば、必ずシステム日付をキーワードに含めてください。
    - コード修正の依頼を受けた場合は、可能な限り write_local_file よりも replace_in_file を優先的に使用してください。
    - コード修正の直後には run_validation を呼び出し、テスト/リント/文法検証を必ず実行してください。
-   3. 条件検証：収集されたデータと作成する文章が、1の「追加条件」をすべて満たしているか確認します.
+   3. 条件検証:収集されたデータと作成する文章が、1の「追加条件」をすべて満たしているか確認します.
    4. 最終回答：条件を完璧に反映して出力します。
 
    [回答に関する特別なガイドライン]
-   - 天기情報の回答時:
+   - 天気情報の回答時:
    - 数値データ（気温、湿度、風速など）に基づいた「常識的で具体的なアドバイス」を本文の最初または最後に添えてください。
 
     - 霧(Mist/Fog): 「視界が悪いため、運転や歩行に注意してください」。

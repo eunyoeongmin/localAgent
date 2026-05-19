@@ -18,26 +18,27 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # URL末尾のスラッシュを削除して接続エラーを防止
     base_url = LEMONADE_BASE_URL.strip().rstrip("/")
-
-    # 接続の安定性のためにKeep-Aliveを無効化し、タイムアウトを精緻化
-    limits = httpx.Limits(max_keepalive_connections=0, max_connections=10)
-    timeout_config = httpx.Timeout(
-        connect=10.0,
-        read=120.0,
+    
+    # NPUの待機時間を考慮した詳細なタイムアウト設定
+    custom_timeout = httpx.Timeout(
+        connect=10.0, # 接続試行 10秒待機
+        read=120.0,   # NPUの思考時間 120秒まで待機
         write=10.0,
-        pool=None
+        pool=None     # コネクションプーリングをオフにして毎回クリーンに接続
     )
-
+    
+    # 接続の安定性のためにKeep-Aliveを無効化
+    limits = httpx.Limits(max_keepalive_connections=0, max_connections=10)
+    
     return ChatOpenAI(
         base_url=base_url,
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=timeout_config,
-        max_retries=5,
+        timeout=custom_timeout,
+        max_retries=5, # 接続失敗時に5回自動リトライ
         http_client=httpx.Client(limits=limits),
         http_async_client=httpx.AsyncClient(limits=limits)
     )

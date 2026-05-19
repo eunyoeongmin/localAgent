@@ -33,7 +33,7 @@ async def safe_llm_call(messages, is_tool=False):
         await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
         raise e
 
-# --- 既存のロジック維持 ---
+# --- 既存のロジック維持 (UI日本語) ---
 CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
 CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
@@ -70,7 +70,7 @@ async def main(message: cl.Message):
     messages = cl.user_session.get("messages")
     pending_change_request = cl.user_session.get("pending_change_request")
 
-    # [追加] ファイルアップロード処理
+    # ファイルアップロード処理
     content_list = []
     if query:
         content_list.append({"type": "text", "text": query})
@@ -94,7 +94,7 @@ async def main(message: cl.Message):
                     "text": f"\n[添付ファイル: {element.name}]\n{file_content}"
                 })
 
-    # HumanMessage生成 (マルチモーダル対応: 添付があればリスト、なければ文字列)
+    # HumanMessage生成 (マルチモーダル対応)
     if not content_list:
         return
     
@@ -126,22 +126,18 @@ async def main(message: cl.Message):
 
     max_retries = 3
     current_attempt = 0
-    full_response_content = ""
     
     while current_attempt < max_retries:
         try:
-            # ツール呼び出しの有無を確認 (ツール呼び出しはストリーミングしない)
+            # ツール呼び出しの有無を確認 (朝の安定ロジックに戻す)
             response = await safe_llm_call(messages, is_tool=True)
             
             if not response.tool_calls:
-                # 最終回答の場合はストリーミングで出力
-                async for chunk in chat_llm.astream(messages):
-                    if chunk.content:
-                        full_response_content += chunk.content
-                        await msg.stream_token(chunk.content)
-                
-                messages.append(AIMessage(content=full_response_content))
-                await msg.send()
+                # 最終回答を取得
+                final_response = await safe_llm_call(messages, is_tool=False)
+                messages.append(final_response)
+                msg.content = extract_content(final_response.content)
+                await msg.update()
                 break
             
             # ツール呼び出しの場合の処理
@@ -152,9 +148,10 @@ async def main(message: cl.Message):
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
             current_attempt += 1
         except Exception as e:
-            await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
+            await cl.Message(content=f"❌ **[システムエラー]** 回答生成中にエラーが発生しました: {str(e)}").send()
             return
 
+    # セッションを確実に更新
     cl.user_session.set("messages", messages)
 
 if __name__ == "__main__":

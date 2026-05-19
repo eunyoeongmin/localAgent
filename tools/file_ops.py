@@ -139,7 +139,7 @@ class LocalFileReadInput(BaseModel):
 @tool(args_schema=LocalFileReadInput)
 async def read_local_file(path: str, query: str) -> str:
     """
-    ローカルファイル(txt, md, py, csvなど)をチャンク単位で分割し、
+    ローカルファイル(txt, md, py, csvなど)をチャン크単位で分割し、
     埋め込み + ベクトル検索を通じて、クエリに関連する内容を返します。
     """
     try:
@@ -147,7 +147,7 @@ async def read_local_file(path: str, query: str) -> str:
         print(f"\n[DEBUG] ファイル読み取り: {abs_path}")
         content, chunks, vector_store = await _get_cached_vector_store(abs_path)
         print(
-            f"[DEBUG] ファイルインデックス完了 - 文字数: {len(content)}, チャンク数: {len(chunks)}, モデル: {EMBEDDING_MODEL}"
+            f"[DEBUG] 파일 인덱스 완료 - 글자 수: {len(content)}, チャンク数: {len(chunks)}, 모델: {EMBEDDING_MODEL}"
         )
 
         if _is_full_content_query(query):
@@ -166,118 +166,117 @@ async def read_local_file(path: str, query: str) -> str:
             f"[ファイル検索結果: {abs_path}]\n"
             f"- 処理方式: {mode}\n"
             f"- 埋め込みモデル: {EMBEDDING_MODEL}\n"
-            f"- 総チャンク数: {len(chunks)}\n\n"
+            f"- 총 チャンク 수: {len(chunks)}\n\n"
             f"{selected_text}"
         )
     except FileNotFoundError:
-        return f"ファイルが見つかりません: {os.path.abspath(path)}"
+        return f"파일을 찾을 수 없습니다: {os.path.abspath(path)}"
     except ImportError as e:
-        return f"ファイル検索用の依存関係を読み込めませんでした: {str(e)}"
+        return f"파일 검색용 의존성을 로드하지 못했습니다: {str(e)}"
     except Exception as e:
-        return f"ファイル読み取り失敗: {str(e)}"
+        return f"파일 읽기 실패: {str(e)}"
 
 
 class LocalFileWriteInput(BaseModel):
     path: str = Field(description="書き込むファイルのパス（絶対パスまたは現在のディレクトリ基準の相対パス）")
-    content: str = Field(description="ファイルに書き込む全内容（既存ファイルの場合は上書き）")
-
+    content: str = Field(description="파일에 작성할 전체 내용 (기존 파일이 있으면 덮어쓰기)")
 
 
 @tool(args_schema=LocalFileWriteInput)
 async def write_local_file(path: str, content: str) -> str:
     """
-    ローカルファイルに内容を書き込みます。ファイルがない場合は新しく作成し、ある場合は上書きします。
-    ユーザーがファイルの修正、作成、保存を依頼したときに使用します.
-    必ずユーザーが明示的に保存/修正/作成を依頼した場合にのみ使用してください。
+    로컬 파일에 내용을 작성합니다. 파일이 없으면 새로 생성하고, 있으면 덮어씁니다.
+    사용자가 파일의 수정, 생성, 저장을 요청했을 때 사용합니다.
+    반드시 사용자가 명시적으로 저장/수정/생성을 요청한 경우에만 사용하십시오.
     """
     try:
         abs_path = os.path.abspath(path)
-        print(f"\n[DEBUG] ファイル書き込み: {abs_path}")
+        print(f"\n[DEBUG] 파일 쓰기: {abs_path}")
         with open(abs_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        print("[DEBUG] ファイル書き込み完了")
-        return f"ファイル保存完了: {abs_path}"
+        print("[DEBUG] 파일 쓰기 완료")
+        return f"파일 저장 완료: {abs_path}"
     except Exception as e:
-        return f"ファイル書き込み失敗: {str(e)}"
+        return f"파일 쓰기 실패: {str(e)}"
 
 
 class ListDirectoryInput(BaseModel):
-    path: str = Field(description="探索するフォルダパス（絶対パスまたは相対パス）。現在のフォルダは '.' と入力")
+    path: str = Field(description="탐색할 폴더 경로 (절대 경로 또는 상대 경로). 현재 폴더는 '.' 입력")
 
 
 @tool(args_schema=ListDirectoryInput)
 async def list_directory(path: str) -> str:
     """
-    特定のフォルダ内にどのようなファイルとサブフォルダがあるかのリストを返します.
-    ユーザーがどのようなファイルがあるか尋ねたり、ファイルを探す前にフォルダ構造を把握したりするときに使用합니다。
+    특정 폴더 안에 어떤 파일과 하위 폴더가 있는지 목록을 반환합니다.
+    사용자가 어떤 파일이 있는지 묻거나, 파일을 찾기 전에 폴더 구조를 파악할 때 사용합니다.
     """
     try:
         abs_path = os.path.abspath(path)
-        print(f"\n[DEBUG] フォルダ探索: {abs_path}")
+        print(f"\n[DEBUG] 폴더 탐색: {abs_path}")
         if not os.path.isdir(abs_path):
-            return f"フォルダが見つかりません: {abs_path}"
+            return f"폴더를 찾을 수 없습니다: {abs_path}"
         items = os.listdir(abs_path)
         result = []
         for item in sorted(items):
             full = os.path.join(abs_path, item)
             if os.path.isdir(full):
-                result.append(f"[フォルダ] {item}/")
+                result.append(f"[폴더] {item}/")
             else:
                 size = os.path.getsize(full)
-                result.append(f"[ファイル] {item} ({size:,} bytes)")
+                result.append(f"[파일] {item} ({size:,} bytes)")
         listing = "\n".join(result)
-        return f"[{abs_path}] フォルダ内容:\n{listing}"
+        return f"[{abs_path}] 폴더 내용:\n{listing}"
     except Exception as e:
-        return f"フォルダ探索失敗: {str(e)}"
+        return f"폴더 탐색 실패: {str(e)}"
 
 
 class ReplaceInFileInput(BaseModel):
-    path: str = Field(description="修正するファイルのパス（絶対パスまたは相対パス）")
-    old_text: str = Field(description="探して置き換える既存のテキスト")
-    new_text: str = Field(description="既存のテキストを置き換える新しいテキスト")
-    max_replacements: int = Field(description="最大置換回数（デフォルト 1）", default=1)
+    path: str = Field(description="수정할 파일의 경로 (절대 경로 또는 상대 경로)")
+    old_text: str = Field(description="찾아서 교체할 기존 텍스트")
+    new_text: str = Field(description="기존 텍스트를 대체할 새로운 텍스트")
+    max_replacements: int = Field(description="최대 교체 횟수 (기본 1)", default=1)
 
 
 @tool(args_schema=ReplaceInFileInput)
 async def replace_in_file(path: str, old_text: str, new_text: str, max_replacements: int = 1) -> str:
     """
-    ファイルの特定のテキストを正確に探し、新しいテキストに置き換えます。
-    Diffをターミナルに表示した後、ユーザーの承認(y/n/e)を得て実際に適用します。
+    파일의 특정 텍스트를 정확히 찾아 새로운 텍스트로 바꿉니다.
+    Diff를 터미널에 표시한 후, 사용자의 승인(y/n/e)을 얻어 실제로 적용합니다.
     """
     try:
         abs_path = os.path.abspath(path)
-        print(f"\n[DEBUG] ファイル置換修正: {abs_path}")
+        print(f"\n[DEBUG] 파일 치환 수정: {abs_path}")
 
         with open(abs_path, 'r', encoding='utf-8') as f:
             original_content = f.read()
 
         found_count = original_content.count(old_text)
         if found_count == 0:
-            return "修正失敗：old_textがファイル内で見つかりませんでした。read_local_fileで最新の内容を再確認してください。"
+            return "수정 실패：old_text를 파일 내에서 찾을 수 없습니다. read_local_file로 최신 내용을 다시 확인하세요."
 
         replace_count = max(1, int(max_replacements))
         new_content = original_content.replace(old_text, new_text, replace_count)
 
-        # Diff表示およびユーザー承認プロセス
+        # Diff 표시 및 사용자 승인 프로세스
         result = await confirm_and_apply_changes(abs_path, original_content, new_content)
         
         if result.startswith("success:"):
-            return f"修正完了およびファイル保存: {abs_path} ({min(found_count, replace_count)}回の置換)"
+            return f"수정 완료 및 파일 저장: {abs_path} ({min(found_count, replace_count)}회의 치환)"
         elif result == "rejected":
-            return "ユーザーが変更事項を拒否しました。再度依頼してください。"
+            return "사용자가 변경 사항을 거부했습니다. 다시 요청해 주세요."
         elif result.startswith("edit:"):
             feedback = result[5:]
-            return f"ユーザーフィードバック: {feedback}\nこのフィードバックを基に修正を再試行してください。"
+            return f"사용자 피드백: {feedback}\n이 피드백을 기반으로 수정을 다시 시도하세요."
         else:
             return result
 
     except Exception as e:
-        return f"ファイル置換修正失敗: {str(e)}"
+        return f"파일 치환 수정 실패: {str(e)}"
 
 
 class RunValidationInput(BaseModel):
     check: str = Field(
-        description="実行する検証の種類。サポート：'pytest', 'ruff', 'mypy', 'python_syntax'",
+        description="실행할 검증 종류. 지원：'pytest', 'ruff', 'mypy', 'python_syntax'",
         default="pytest"
     )
 
@@ -285,8 +284,8 @@ class RunValidationInput(BaseModel):
 @tool(args_schema=RunValidationInput)
 async def run_validation(check: str = "pytest") -> str:
     """
-    コード修正後にテスト/リントを実行して結果を返します.
-    許可された検証コマンドのみを実行して安全性を維持します。
+    코드 수정 후 테스트/린트를 실행하여 결과를 반환합니다.
+    허용된 검증 커맨드만 실행하여 안전성을 유지합니다.
     """
     commands = {
         "pytest": ["python", "-m", "pytest", "-q"],
@@ -298,11 +297,11 @@ async def run_validation(check: str = "pytest") -> str:
     selected = check.strip().lower()
     if selected not in commands:
         supported = ", ".join(commands.keys())
-        return f"サポートされていない検証の種類です: {check}。サポートリスト: {supported}"
+        return f"지원되지 않는 검증 종류입니다: {check}. 지원 목록: {supported}"
 
     cmd = commands[selected]
     cwd = os.getcwd()
-    print(f"\n[DEBUG] 検証実行: {' '.join(cmd)} (cwd={cwd})")
+    print(f"\n[DEBUG] 검증 실행: {' '.join(cmd)} (cwd={cwd})")
 
     def _run():
         return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
@@ -313,40 +312,39 @@ async def run_validation(check: str = "pytest") -> str:
         stderr = (completed.stderr or "").strip()
         merged = "\n".join([part for part in [stdout, stderr] if part])
         if len(merged) > 8000:
-            merged = merged[:8000] + "\n\n[... 出力省略 ...]"
-
+            merged = merged[:8000] + "\n\n[... 출력 생략 ...]"
 
         if completed.returncode == 0:
-            return f"検証成功 ({selected})\n{merged}" if merged else f"検証成功 ({selected})"
-        return f"検証失敗 ({selected}, exit={completed.returncode})\n{merged}"
+            return f"검증 성공 ({selected})\n{merged}" if merged else f"검증 성공 ({selected})"
+        return f"검증 실패 ({selected}, exit={completed.returncode})\n{merged}"
     except Exception as e:
-        return f"検証実行失敗 ({selected}): {str(e)}"
+        return f"검증 실행 실패 ({selected}): {str(e)}"
 
 
 # =====================================================
-# ヘルパー関数: Diff表示およびInteractive承認プロセス
+# 헬퍼 함수: Diff 표시 및 Interactive 승인 프로세스
 # =====================================================
 
 
 def display_diff_with_colors(old_content: str, new_content: str, file_path: str) -> None:
     """
-    difflib.unified_diffを使用してGitHub PRスタイルDiffを出力します.
-    richがあれば色表現、なければテキストで出力します。
+    difflib.unified_diff를 사용하여 GitHub PR 스타일 Diff를 출력합니다.
+    rich가 있으면 색상 표현, 없으면 텍스트로 출력합니다.
     """
     old_lines = old_content.splitlines(keepends=True)
     new_lines = new_content.splitlines(keepends=True)
 
     diff_gen = difflib.unified_diff(
-        old_lines, new_lines, fromfile=f"{file_path} (既存)", tofile=f"{file_path} (修正)"
+        old_lines, new_lines, fromfile=f"{file_path} (기존)", tofile=f"{file_path} (수정)"
     )
     diff_lines = list(diff_gen)
 
     if not diff_lines:
-        print("[変更事項なし]")
+        print("[변경 사항 없음]")
         return
 
     if RICH_AVAILABLE:
-        console.print("\n[GitHub PRスタイル Diff]\n")
+        console.print("\n[GitHub PR 스타일 Diff]\n")
         for line in diff_lines:
             if line.startswith("+++") or line.startswith("---"):
                 console.print(line.rstrip(), style="bold blue")
@@ -359,24 +357,24 @@ def display_diff_with_colors(old_content: str, new_content: str, file_path: str)
             else:
                 console.print(line.rstrip())
     else:
-        print("\n[Diff変更事項]\n")
+        print("\n[Diff 변경 사항]\n")
         print("".join(diff_lines))
 
 
 async def get_user_approval() -> str:
     """
-    ターミナルからユーザー入力を受け取り、承認ステータスを返します。
+    터미널에서 사용자 입력을 받아 승인 상태를 반환합니다.
     - 'y' / 'yes' / 'ok' → 'accept'
     - 'n' / 'no' → 'reject'
-    - 'e' / 'edit' + フィードバック → 'edit:<フィードバック>'
+    - 'e' / 'edit' + 피드백 → 'edit:<피드백>'
     """
-    print("\n[承認が必要]\nオプションを選択してください:")
-    print("  [y] Accept  - 変更事項をファイルに適用")
-    print("  [n] Reject  - 変更事項をキャンセル")
-    print("  [e] Edit    - フィードバック入力後に再修正を依頼\n")
+    print("\n[승인 필요]\n옵션을 선택하세요:")
+    print("  [y] Accept  - 변경 사항을 파일에 적용")
+    print("  [n] Reject  - 변경 사항을 취소")
+    print("  [e] Edit    - 피드백 입력 후 재수정 요청\n")
 
     def _input_sync():
-        user_input = input("選択 [y/n/e]: ").strip().lower()
+        user_input = input("선택 [y/n/e]: ").strip().lower()
         return user_input
 
     user_choice = await asyncio.to_thread(_input_sync)
@@ -387,13 +385,13 @@ async def get_user_approval() -> str:
         return "reject"
     elif user_choice in ["e", "edit"]:
         def _feedback_input():
-            feedback = input("フィードバック入力: ").strip()
+            feedback = input("피드백 입력: ").strip()
             return feedback
 
         feedback = await asyncio.to_thread(_feedback_input)
         return f"edit:{feedback}" if feedback else "reject"
     else:
-        print("[警告] 無効な入力です。拒否として処理します。")
+        print("[경고] 유효하지 않은 입력입니다. 거부로 처리합니다.")
         return "reject"
 
 
@@ -401,17 +399,16 @@ async def confirm_and_apply_changes(
     file_path: str, old_content: str, new_content: str
 ) -> str:
     """
-    ファイルの変更事項をDiffで視覚化し、ユーザーの承認後に実際に適用します。
-    返り値:
-    - "success:<ファイルパス>" → 変更の適用完了
-    - "rejected" → ユーザーが拒否
-    - "edit:<フィードバック>" → ユーザーがフィードバックを提示（エージェントが再修正する必要あり）
+    파일의 변경 사항을 Diff로 시각화하고, 사용자의 승인 후 실제로 적용합니다.
+    반환값:
+    - "success:<파일 경로>" → 변경 적용 완료
+    - "rejected" → 사용자가 거부
+    - "edit:<피드백>" → 사용자가 피드백 제시 (에이전트가 재수정 필요)
     """
-
 
     abs_path = os.path.abspath(file_path)
     print(f"\n{'=' * 60}")
-    print(f"ファイル: {abs_path}")
+    print(f"파일: {abs_path}")
     print("=" * 60)
 
     display_diff_with_colors(old_content, new_content, abs_path)
@@ -422,16 +419,16 @@ async def confirm_and_apply_changes(
         try:
             with open(abs_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
-            print(f"\n✓ 変更事項がファイルに適用されました: {abs_path}\n")
+            print(f"\n✓ 변경 사항이 파일에 적용되었습니다: {abs_path}\n")
             return f"success:{abs_path}"
         except Exception as e:
-            return f"error:ファイル書き込み失敗 - {str(e)}"
+            return f"error:파일 쓰기 실패 - {str(e)}"
     elif approval == "rejected":
-        print("\n✗ 変更事項がキャンセルされました。\n")
+        print("\n✗ 변경 사항이 취소되었습니다.\n")
         return "rejected"
     elif approval.startswith("edit:"):
         feedback = approval[5:]
-        print(f"\n✎ フィードバックが記録されました: {feedback}\n")
+        print(f"\n✎ 피드백이 기록되었습니다: {feedback}\n")
         return f"edit:{feedback}"
     else:
         return "rejected"

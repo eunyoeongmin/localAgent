@@ -9,7 +9,7 @@ class SearchInput(BaseModel):
 @tool(args_schema=SearchInput)
 async def web_search(query: str, constraints: str = "") -> str:
     """インターネットで最新ニュースや2025年以降の情報を検索します。
-    ユーザーの追加条件(constraints)がある場合は、検索キーワードの組み合わせ에 積極的に反映させてください。
+    ユーザーの追加条件(constraints)がある場合は、検索キーワードの組み合わせに 積極的に反映させてください。
     """
     # [変更] インポート時のエラーを防止するため、関数内でツールを初期化 (Lazy Loading)
     from langchain_community.tools import DuckDuckGoSearchRun

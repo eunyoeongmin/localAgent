@@ -9,5 +9,5 @@ pinned: false
 ---
 
 # localAgent
-Chainlit 기반의 로컬 LLM 에이전트 시스템입니다.
-현재 Hugging Face Spaces에서 Docker를 통해 실행 중입니다.
+ChainlitベースのローカルLLMエージェントシステムです。
+現在、Hugging Face Spaces上でDockerを通じて実行されています。

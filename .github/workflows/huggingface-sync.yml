@@ -29,7 +29,7 @@ jobs:
           pip install ruff
           ruff check .
 
-      # 모든 테스트가 통과했을 때만 배포 진행
+      # すべてのテストがパスした場合のみデプロイを進行
       - name: Push to Hugging Face
         if: success()
         env:

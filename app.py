@@ -115,12 +115,12 @@ async def main(message: cl.Message):
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
         await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか？ '承認'と入力してください。").send()   
-        messages.append(HumanMessage(content=query))
+        messages.append(human_msg)
         messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
         return
     else:
-        messages.append(HumanMessage(content=query))
+        messages.append(human_msg)
 
     msg = cl.Message(content="")
     await msg.send()

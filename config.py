@@ -19,7 +19,9 @@ def create_llm(*, temperature: float, provider: str = "local"):
         api_key=LM_STUDIO_API_KEY,
         model=LM_STUDIO_MODEL,
         temperature=temperature,
-        default_headers={"ngrok-skip-browser-warning": "true"}
+        default_headers={"ngrok-skip-browser-warning": "true"},
+        timeout=120, # 타임아웃 120초로 증가
+        max_retries=2
     )
 
 

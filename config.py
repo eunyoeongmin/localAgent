@@ -1,5 +1,6 @@
 import os
 import datetime
+import httpx
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from tools import all_tools
@@ -19,19 +20,20 @@ def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
     # URL末尾のスラッシュを削除して接続エラーを防止
     base_url = LEMONADE_BASE_URL.strip().rstrip("/")
-    
+
+    # 接続の安定性のためにKeep-Aliveを無効化
+    limits = httpx.Limits(max_keepalive_connections=0, max_connections=10)
+
     return ChatOpenAI(
         base_url=base_url,
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,
-        default_headers={
-            "ngrok-skip-browser-warning": "true",
-            "Connection": "close"
-        },
-        
+        default_headers={"ngrok-skip-browser-warning": "true"},
         timeout=300,
-        max_retries=2
+        max_retries=2,
+        http_client=httpx.Client(limits=limits),
+        http_async_client=httpx.AsyncClient(limits=limits)
     )
 
 

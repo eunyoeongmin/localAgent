@@ -1,6 +1,7 @@
 import sys
 import subprocess
 import importlib.util
+import traceback
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題を解決するためのランタイムインストール
 try:
@@ -22,9 +23,12 @@ async def safe_llm_call(messages, is_tool=False):
     """LLM呼び出しを試行します。"""
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
     try:
+        print(f"[DEBUG] Initiating LLM Call (is_tool={is_tool})")
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        print(f"[ERROR] LLM Call Failed: {str(e)}")
+        print(f"--- [LLM CALL ERROR] ---")
+        traceback.print_exc()
+        print(f"--- [ERROR END] ---")
         await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
         raise e
 
@@ -35,6 +39,7 @@ async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
 
     try:
+        print(f"[DEBUG] Initiating Stream Call (is_tool={is_tool})")
         async for chunk in llm_instance.astream(messages):
             if hasattr(chunk, "tool_calls") and chunk.tool_calls:
                 for tc in chunk.tool_calls:
@@ -47,15 +52,17 @@ async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
                 
         return AIMessage(content=full_content, tool_calls=tool_calls)
     except Exception as e:
+        print(f"--- [STREAM ERROR] ---")
+        traceback.print_exc()
+        print(f"--- [ERROR END] ---")
         if full_content or tool_calls:
             print(f"[WARN] Connection dropped, but content preserved: {str(e)}")
             return AIMessage(content=full_content, tool_calls=tool_calls)
-        print(f"[ERROR] Streaming Failed: {str(e)}")
         await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
         raise e
 
 # --- 既存のロジック維持 (UI日本語) ---
-CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
+CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リ네임"]
 CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
 
@@ -126,21 +133,21 @@ async def main(message: cl.Message):
     for i in range(len(messages)):
         if isinstance(messages[i], HumanMessage) and isinstance(messages[i].content, list):
             text_only = "".join([item["text"] for item in messages[i].content if item.get("type") == "text"])
-            messages[i] = HumanMessage(content=text_only + "\n[過去の画像はメモリ最適화のため削除されました]")
+            messages[i] = HumanMessage(content=text_only + "\n[過去の画像はメモリ最適化のため削除されました]")
 
     if pending_change_request is not None:
         if is_approval(query):
-            messages.append(HumanMessage(content=f"ユーザーが計画を承認しました。\n元のリクエスト: {pending_change_request}"))
+            messages.append(HumanMessage(content=f"ユーザー가 계획을 승인했습니다.\n원래 요청: {pending_change_request}"))
             cl.user_session.set("pending_change_request", None)
         else:
-            await cl.Message(content="[システム] 計画がキャンセルされました。").send()
+            await cl.Message(content="[시스템] 계획이 취소되었습니다.").send()
             cl.user_session.set("pending_change_request", None)
             return
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか？ '承認'と入力してください。").send()   
+        await cl.Message(content=f"📋 **[변경 계획]**\n{plan_text}\n\n위 계획대로 진행할까요? '승인'이라고 입력해주세요.").send()   
         messages.append(human_msg)
-        messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
+        messages.append(AIMessage(content=f"[변경 계획]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
         return
     else:
@@ -153,18 +160,18 @@ async def main(message: cl.Message):
     current_attempt = 0
     while current_attempt < max_retries:
         try:
-            # 1. ツール呼び出し確認
+            # 1. 툴 호출 확인
             response = await safe_llm_call(messages, is_tool=True)
             
             if not response.tool_calls:
-                # 2. 最終応答 (ストリーミング)
+                # 2. 최종 응답 (스트리밍)
                 final_response = await safe_llm_stream_process(messages, msg, is_tool=False)
                 messages.append(final_response)
                 msg.content = extract_content(final_response.content)
                 await msg.update()
                 break
 
-            # 3. ツール実行
+            # 3. 툴 실행
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)

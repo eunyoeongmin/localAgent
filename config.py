@@ -18,7 +18,7 @@ TOOL_TEMPERATURE = 0.1
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
     # .envの設定値をそのまま使用 (末尾のスラッシュのみ削除)
-    base_url = LEMONADE_BASE_URL.strip().rstrip("/")
+    base_url = LEMONADE_BASE_URL
 
     return ChatOpenAI(
         base_url=base_url,

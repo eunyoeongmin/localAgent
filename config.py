@@ -10,7 +10,7 @@ load_dotenv()
 # .envにLEMONADE_関連の設定がない場合、OPENAI_設定を参照するように構成
 LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:13305/v1"))
 LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", os.getenv("OPENAI_API_KEY", "lemonade"))
-LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma4-it-e2b-FLM")
+LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 

@@ -31,13 +31,12 @@ async def safe_llm_call(messages, is_tool=False):
         raise e
 
 async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
-    """GPU環境に最適化された標準ストリーミング関数です。"""
+    """GPU/ローカル環境の不安定な切断を考慮したストリーミング関数"""
     full_content = ""
     tool_calls = []
     llm_instance = tool_llm_with_tools if is_tool else chat_llm
 
     try:
-        # GPUモデルは接続が安定しているため、標準ループのみを使用します。
         async for chunk in llm_instance.astream(messages):
             if hasattr(chunk, "tool_calls") and chunk.tool_calls:
                 tool_calls.extend(chunk.tool_calls)
@@ -49,9 +48,14 @@ async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
         return AIMessage(content=full_content, tool_calls=tool_calls)
 
     except Exception as e:
-        # ネットワーク切断などの実際の致命的なエラーのみを捕捉して表示します。
+        # 💡 [重要] すでに回答の一部を受け取っている状態で切断された場合、エラーとして扱わず生成された内容を返します。
+        if full_content or tool_calls:
+            print(f"[WARN] 接続が切れましたが、生成された内容は保持されます: {str(e)}")
+            return AIMessage(content=full_content, tool_calls=tool_calls)
+        
+        # 最初から通信に失敗した場合のみ、エラーメッセージを表示します。
         print(f"[ERROR] Streaming Failed: {str(e)}")
-        await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
+        await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
         raise e
 
 # --- 既存のロジック維持 (UI日本語) ---

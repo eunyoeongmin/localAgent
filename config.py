@@ -6,9 +6,9 @@ from tools import all_tools
 
 load_dotenv()
 # Lemonadeサーバー設定 (基本ポート 13305)
-LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://127.0.0.1:8001")
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://127.0.0.1:13305/v1")
 LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", "lemonade")
-LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma-4-E2B-it-Q4_K_M.gguf")
+LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
 
 # モデルパラメータ
 CHAT_TEMPERATURE = 0.8
@@ -17,15 +17,19 @@ TOOL_TEMPERATURE = 0.1
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # .envの設定値をそのまま使用 (末尾のスラッシュのみ削除)
-    base_url = LEMONADE_BASE_URL
+    base_url = LEMONADE_BASE_URL.strip().rstrip("/")
 
     return ChatOpenAI(
         base_url=base_url,
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,
-        default_headers={"ngrok-skip-browser-warning": "true"},
+        streaming=True,
+        # 💡 [重要] HTTP 1.1 対策: ゾンビコネクションを防止するため、リクエストごとに接続を閉じるように強制
+        default_headers={
+            "ngrok-skip-browser-warning": "true",
+            "Connection": "close"
+        },
         timeout=60.0  # GPU環境に合わせて60秒に短縮
     )
 

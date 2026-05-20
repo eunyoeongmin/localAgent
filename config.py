@@ -6,7 +6,7 @@ from tools import all_tools
 
 load_dotenv()
 # Lemonadeサーバー設定 (基本ポート 13305)
-LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://127.0.0.1:8001/v1")
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://127.0.0.1:8001")
 LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", "lemonade")
 LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma-4-E2B-it-Q4_K_M.gguf")
 

@@ -1,16 +1,15 @@
 import os
 import datetime
-import httpx
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from tools import all_tools
 
 load_dotenv()
-# Lemonadeサーバー設定 (基本ポート 13305 -> 実験用 8001)
+# Lemonadeサーバー設定 (基本ポート 13305)
 # .envにLEMONADE_関連の設定がない場合、OPENAI_設定を参照するように構成
-LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8001/v1"))
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:13305/v1"))
 LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", os.getenv("OPENAI_API_KEY", "lemonade"))
-LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-FLM")
+LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
@@ -20,25 +19,14 @@ def create_llm(*, temperature: float):
     # /api/v1 が含まれている場合は標準の /v1 に置換し、末尾のスラッシュを削除
     base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
 
-    # NPU実験用の余裕を持ったタイムアウト設定
-    custom_timeout = httpx.Timeout(
-        connect=10.0,
-        read=120.0,   # NPUの思考時間を考慮
-        write=10.0,
-        pool=None
-    )
-
     return ChatOpenAI(
         base_url=base_url,
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=custom_timeout
+        timeout=60.0  # 標準的なタイムアウト設定
     )
-
-
-
 
 chat_llm = create_llm(temperature=CHAT_TEMPERATURE)
 tool_llm = create_llm(temperature=TOOL_TEMPERATURE)

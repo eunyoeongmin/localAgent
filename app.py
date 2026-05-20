@@ -23,11 +23,20 @@ async def safe_llm_call(messages, is_tool=False):
     # config.pyで既に生成されたインスタンスを再利用
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
 
+    import traceback
     try:
+        # [DEBUG] 呼び出し直前にメッセージの型を確認
+        print(f"[DEBUG] Initiating LLM Call (is_tool={is_tool})")
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        print(f"[DEBUG] Connection Retry Failed: {str(e)}")
-        await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
+        print(f"--- [CRITICAL ERROR START] ---")
+        print(f"Error Type: {type(e).__name__}")
+        print(f"Error Message: {str(e)}")
+        print("Traceback:")
+        traceback.print_exc()
+        print(f"--- [CRITICAL ERROR END] ---")
+
+        await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました。\n型: `{type(e).__name__}`\n詳細: `{str(e)}`").send()
         raise e
 
 # --- 既存のロジック維持 (UI日本語) ---

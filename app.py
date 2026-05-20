@@ -135,10 +135,13 @@ async def main(message: cl.Message):
 
     max_retries = 3
     current_attempt = 0
+    import asyncio
     while current_attempt < max_retries:
         try:
             response = await safe_llm_call(messages, is_tool=True)
             if not response.tool_calls:
+                # 連続呼び出し時のネットワーク衝突を避けるために1秒待機
+                await asyncio.sleep(1)
                 final_response = await safe_llm_call(messages, is_tool=False)
                 messages.append(final_response)
                 msg.content = extract_content(final_response.content)

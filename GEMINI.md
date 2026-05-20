@@ -7,6 +7,6 @@
 
 ## Architecture & Conventions
 - **LLM Engine:** Lemonade LLM Server (Exclusively used)
-- **Model:** `Gemma-4-E2B-it-GGUF`
+- **Model:** `gemma4-it-e2b-FLM`
 - **Streaming:** Final LLM responses must be streamed using `astream`.
 - **Multimodal:** Supports image and file uploads via Chainlit.

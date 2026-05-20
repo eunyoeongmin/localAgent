@@ -26,9 +26,9 @@ async def safe_llm_call(messages, is_tool=False):
         print(f"[DEBUG] Initiating LLM Call (is_tool={is_tool})")
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        print(f"--- [LLM CALL ERROR] ---")
+        print("--- [LLM CALL ERROR] ---")
         traceback.print_exc()
-        print(f"--- [ERROR END] ---")
+        print("--- [ERROR END] ---")
         await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
         raise e
 

@@ -161,29 +161,41 @@ async def main(message: cl.Message):
     current_attempt = 0
     while current_attempt < max_retries:
         try:
-            # 1. 툴 호출 확인
+            # [DEBUG] 시도 횟수 출력
+            print(f"[DEBUG] Processing Turn - Attempt {current_attempt + 1}/{max_retries}")
+
+            # 1. ツール呼び出し確認
             response = await safe_llm_call(messages, is_tool=True)
-            
+
             if not response.tool_calls:
-                # 2. 最終応答 (스트리밍)
-                # ngrokの接続制限を回避するため、連続呼び出しの間に2秒の猶予を与えます
-                await asyncio.sleep(2)
+                # 2. 最終応答 (ストリーミング)
+                # ngrokの接続制限を回避するため、連続呼び出しの間に3초의 猶予を与えます
+                await asyncio.sleep(3)
                 final_response = await safe_llm_stream_process(messages, msg, is_tool=False)
                 messages.append(final_response)
-                # 스트리밍이 완료되었으므로 update 대신 텍스트 확인
                 msg.content = extract_content(final_response.content)
                 await msg.update()
                 break
 
-            # 3. 툴 실행
+            # 3. ツール実行
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
                 result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
+
+            # 툴 실행 후 다음 루프(최종 답변 생성)를 위해 시도 횟수 초기화하지 않고 그대로 진행
+            # (만약 툴 실행 후 답변 생성 단계에서 실패하면 다시 툴 확인부터 재시도하게 됨)
+            continue 
+
+        except Exception as e:
             current_attempt += 1
-        except Exception:
-            return
+            print(f"[RETRY] Error occurred: {str(e)}. Waiting 5s before retry {current_attempt}/{max_retries}...")
+            if current_attempt >= max_retries:
+                print("[FATAL] Max retries reached. Giving up.")
+                return
+            await asyncio.sleep(5) # 5초 대기 후 재시도
+            continue
 
     cl.user_session.set("messages", messages)
 

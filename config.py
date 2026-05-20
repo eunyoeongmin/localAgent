@@ -13,17 +13,9 @@ LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
-# 💡 ngrokの接続制限を回避するため、単일のクライアント（接続プール）を共有します
-shared_async_client = httpx.AsyncClient(
-    timeout=httpx.Timeout(connect=20.0, read=300.0, write=20.0, pool=30.0),
-    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-    follow_redirects=True
-)
-
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
     base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
-    print(f"[DEBUG] Connecting to LLM Server: {base_url}")
 
     return ChatOpenAI(
         base_url=base_url,
@@ -32,8 +24,8 @@ def create_llm(*, temperature: float):
         temperature=temperature,
         streaming=True,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        http_async_client=shared_async_client, # 💡 ここで共有クライアントを使用
-        max_retries=2
+        timeout=180.0, # 3분으로 확장
+        max_retries=1  # 재시도는 app.py에서 제어함
     )
 
 

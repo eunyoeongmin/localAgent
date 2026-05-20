@@ -31,28 +31,27 @@ async def safe_llm_call(messages, is_tool=False):
         raise e
 
 async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
-    """最終回答をストリーミング形式で出力します。"""
+    """GPU環境に最適化された標準ストリーミング関数です。"""
     full_content = ""
     tool_calls = []
-
     llm_instance = tool_llm_with_tools if is_tool else chat_llm
+
     try:
+        # GPUモデルは接続が安定しているため、標準ループのみを使用します。
         async for chunk in llm_instance.astream(messages):
             if hasattr(chunk, "tool_calls") and chunk.tool_calls:
                 tool_calls.extend(chunk.tool_calls)
-
+            
             if chunk.content:
                 full_content += chunk.content
                 await msg.stream_token(chunk.content)
-
+                
         return AIMessage(content=full_content, tool_calls=tool_calls)
 
     except Exception as e:
-        print(f"[DEBUG] NPU Streaming Failed: {str(e)}")
-        if full_content:
-            return AIMessage(content=full_content, tool_calls=tool_calls)
-
-        await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
+        # ネットワーク切断などの実際の致命的なエラーのみを捕捉して表示します。
+        print(f"[ERROR] Streaming Failed: {str(e)}")
+        await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
         raise e
 
 # --- 既存のロジック維持 (UI日本語) ---

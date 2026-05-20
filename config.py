@@ -26,7 +26,7 @@ def create_llm(*, temperature: float):
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=120.0  # 安定性のために120秒に設定
+        timeout=60.0  # GPU環境に合わせて60秒に短縮
     )
 
 chat_llm = create_llm(temperature=CHAT_TEMPERATURE)

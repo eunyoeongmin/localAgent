@@ -30,6 +30,20 @@ async def safe_llm_call(messages, is_tool=False):
         await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
         raise e
 
+async def safe_llm_stream(messages, msg: cl.Message):
+    """最終回答をストリーミング形式で出力します。"""
+    full_content = ""
+    try:
+        async for chunk in chat_llm.astream(messages):
+            if chunk.content:
+                full_content += chunk.content
+                await msg.stream_token(chunk.content)
+        return AIMessage(content=full_content)
+    except Exception as e:
+        print(f"[DEBUG] Streaming Failed: {str(e)}")
+        await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
+        raise e
+
 # --- 既存のロジック維持 (UI日本語) ---
 CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
 CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]

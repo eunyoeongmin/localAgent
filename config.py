@@ -7,9 +7,9 @@ from tools import all_tools
 load_dotenv()
 # Lemonadeサーバー設定 (基本ポート 13305)
 # .envにLEMONADE_関連の設定がない場合、OPENAI_設定を参照するように構成
-LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:13305/v1"))
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8001/v1"))
 LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", os.getenv("OPENAI_API_KEY", "lemonade"))
-LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
+LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma4-it:e2b")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
@@ -25,7 +25,12 @@ def create_llm(*, temperature: float):
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=60.0  # 標準的なタイムアウト設定
+        streaming=True,  # (필수 추가) NPU 환경 타임아웃 방지를 위한 강제 스트리밍
+        timeout=120.0,   # (수정) NPU의 느린 초기 반응속도를 고려해 120초 이상으로 연장
+        model_kwargs={
+            "frequency_penalty": 1.0,  # (필수 추가) 같은 문장을 무한 반복하는 버그 차단
+            "presence_penalty": 0.5
+        }
     )
 
 chat_llm = create_llm(temperature=CHAT_TEMPERATURE)

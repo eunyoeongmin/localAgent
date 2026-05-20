@@ -1,25 +1,28 @@
 import os
 import datetime
+import httpx
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from tools import all_tools
 
 load_dotenv()
 # Lemonadeサーバー設定 (基本ポート 13305)
-# .envにLEMONADE_関連の設定がない場合、OPENAI_設定を参照するように構成
 LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:13305/v1"))
 LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", os.getenv("OPENAI_API_KEY", "lemonade"))
 LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
+# 💡 ngrokの接続制限を回避するため、単일のクライアント（接続プール）を共有します
+shared_async_client = httpx.AsyncClient(
+    timeout=httpx.Timeout(connect=20.0, read=300.0, write=20.0, pool=30.0),
+    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+    follow_redirects=True
+)
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # /api/v1 が含まれている場合は標準の /v1 に置換し、末尾のス라쉬를 삭제
     base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
-
-    # [DEBUG] 起動時に接続先URLをコンソールに出力して確認
     print(f"[DEBUG] Connecting to LLM Server: {base_url}")
 
     return ChatOpenAI(
@@ -29,7 +32,7 @@ def create_llm(*, temperature: float):
         temperature=temperature,
         streaming=True,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=120.0, # NPUの思考時間を考慮
+        http_async_client=shared_async_client, # 💡 ここで共有クライアントを使用
         max_retries=2
     )
 

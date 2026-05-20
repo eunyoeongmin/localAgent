@@ -2,6 +2,7 @@ import sys
 import subprocess
 import importlib.util
 import traceback
+import asyncio
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題を解決するためのランタイムインストール
 try:
@@ -164,9 +165,12 @@ async def main(message: cl.Message):
             response = await safe_llm_call(messages, is_tool=True)
             
             if not response.tool_calls:
-                # 2. 최종 응답 (스트리밍)
+                # 2. 最終応答 (스트리밍)
+                # ngrokの接続制限を回避するため、連続呼び出しの間に2秒の猶予を与えます
+                await asyncio.sleep(2)
                 final_response = await safe_llm_stream_process(messages, msg, is_tool=False)
                 messages.append(final_response)
+                # 스트리밍이 완료되었으므로 update 대신 텍스트 확인
                 msg.content = extract_content(final_response.content)
                 await msg.update()
                 break

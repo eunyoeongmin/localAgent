@@ -29,12 +29,12 @@ async def safe_llm_call(messages, is_tool=False):
         print(f"[DEBUG] Initiating LLM Call (is_tool={is_tool})")
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        print(f"--- [CRITICAL ERROR START] ---")
+        print("--- [CRITICAL ERROR START] ---")
         print(f"Error Type: {type(e).__name__}")
         print(f"Error Message: {str(e)}")
         print("Traceback:")
         traceback.print_exc()
-        print(f"--- [CRITICAL ERROR END] ---")
+        print("--- [CRITICAL ERROR END] ---")
 
         await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました。\n型: `{type(e).__name__}`\n詳細: `{str(e)}`").send()
         raise e

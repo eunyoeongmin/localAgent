@@ -124,26 +124,29 @@ async def main(message: cl.Message):
     msg = cl.Message(content="")
     await msg.send()
 
-    max_retries = 3
-    current_attempt = 0
-    while current_attempt < max_retries:
-        try:
-            response = await safe_llm_call(messages, is_tool=True)
-            if not response.tool_calls:
-                final_response = await safe_llm_call(messages, is_tool=False)
-                messages.append(final_response)
-                msg.content = extract_content(final_response.content)
-                await msg.update()
-                break
-
+    try:
+        # 1. ツール呼び出しが必要か判断 (判定は一括で行う)
+        response = await safe_llm_call(messages, is_tool=True)
+        
+        # ツール呼び出しがない場合は、直接最終回答をストリーミング生成
+        if not response.tool_calls:
+            final_response = await safe_llm_stream(messages, msg)
+            messages.append(final_response)
+        else:
+            # 2. ツール実行プロセス
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
                 result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
-            current_attempt += 1
-        except Exception:
-            return
+            
+            # ツール実行結果に基づいた最終回答をストリーミング生成
+            final_response = await safe_llm_stream(messages, msg)
+            messages.append(final_response)
+            
+    except Exception as e:
+        print(f"[ERROR] LLM Processing Error: {str(e)}")
+        # safe_llm_call 内で既にメッセージ送信済みのため、ここではログ出力のみ
 
     cl.user_session.set("messages", messages)
 

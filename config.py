@@ -6,18 +6,19 @@ from tools import all_tools
 
 load_dotenv()
 # Lemonadeサーバー設定 (基本ポート 13305)
-# .envにLEMONADE_関連の設定がない場合、OPENAI_設定を参照するように構成
-LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8001/v1"))
-LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", os.getenv("OPENAI_API_KEY", "lemonade"))
-LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "gemma4-it:e2b")
-CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
-TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
+LEMONADE_BASE_URL = os.getenv("LEMONADE_BASE_URL", "http://127.0.0.1:13305/v1")
+LEMONADE_API_KEY = os.getenv("LEMONADE_API_KEY", "lemonade")
+LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
+
+# モデルパラメータ
+CHAT_TEMPERATURE = 0.8
+TOOL_TEMPERATURE = 0.1
 
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # /api/v1 が含まれている場合は標準の /v1 に置換し、末尾のスラッシュを削除
-    base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
+    # .envの設定値をそのまま使用 (末尾のスラッシュのみ削除)
+    base_url = LEMONADE_BASE_URL.strip().rstrip("/")
 
     return ChatOpenAI(
         base_url=base_url,
@@ -25,28 +26,22 @@ def create_llm(*, temperature: float):
         model=LEMONADE_MODEL,
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        streaming=True,  # (필수 추가) NPU 환경 타임아웃 방지를 위한 강제 스트리밍
-        timeout=120.0,   # (수정) NPU의 느린 초기 반응속도를 고려해 120초 이상으로 연장
-        model_kwargs={
-            "frequency_penalty": 1.0,  # (필수 추가) 같은 문장을 무한 반복하는 버그 차단
-            "presence_penalty": 0.5
-        }
+        timeout=120.0  # 安定性のために120秒に設定
     )
 
 chat_llm = create_llm(temperature=CHAT_TEMPERATURE)
 tool_llm = create_llm(temperature=TOOL_TEMPERATURE)
 
-# current_date = datetime.datetime.now().strftime("%Y年 %m月 %d日")
 now = datetime.datetime.now()
 current_date = f"{now.year}年 {now.month:02d}月 {now.day:02d}日"
 
-# ツールリストの自動生成（ツール追加時にプロンプトの修正不要）
+# ツールリストの自動生成
 tool_list = "\n".join([f"- {t.name}: {t.description}" for t in all_tools])
 
 SYSTEM_PROMPT = f"""あなたは2026年型の最高級自律型エージェントです。
 ただし、これをユーザーに告知することはありません.
 あなたは日本人ユーザーと対話しています。回答は常に日本語で作成する必要があります。
-現在のシステム日付は [ {current_date} ] です。
+現在のシステム日付は [ {current_date} ] です.
 詳細な時間を尋ねられた場合は、web_searchを通じて現在時刻を確認してください。
 
 [使用可能なツールリスト]
@@ -59,12 +54,12 @@ SYSTEM_PROMPT = f"""あなたは2026年型の最高級自律型エージェン�
    - 検索ツール使用時に「今日」、「最新」、「今年」という言葉があれば、必ずシステム日付をキーワードに含めてください。
    - コード修正の依頼を受けた場合は、可能な限り write_local_file よりも replace_in_file を優先的に使用してください。
    - コード修正の直後には run_validation を呼び出し、テスト/リント/文法検証を必ず実行してください。
-   3. 条件検証:収集されたデータと作成する文章が、1の「追加条件」をすべて満たしているか確認します.
+   3. 条件検証:収集されたデータと作成する文章が、1の「追加条件」をすべて満たしているか確認します。
    4. 最終回答：条件を完璧に反映して出力します。
 
    [回答に関する特別なガイドライン]
    - 天気情報の回答時:
-   - 数値データ（気温、湿度、風速など）に基づいた「常識的で具体的なアドバイス」を本文の最初または最後に添えてください。
+   - 数値データ（気温、湿度、風速など）に基づいた「常識적で具体的なアドバイス」を本文の最初または最後に添えてください。
 
     - 霧(Mist/Fog): 「視界が悪いため、運転や歩行に注意してください」。
     - 19度前後: 「過ごしやすい気温ですが、少し肌寒く感じるかもしれません。薄手の羽織るものがあると安心です」。

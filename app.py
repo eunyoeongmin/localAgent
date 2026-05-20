@@ -40,18 +40,18 @@ async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
         async for chunk in llm_instance.astream(messages):
             if hasattr(chunk, "tool_calls") and chunk.tool_calls:
                 tool_calls.extend(chunk.tool_calls)
-            
+
             if chunk.content:
                 full_content += chunk.content
                 await msg.stream_token(chunk.content)
-                
+
         return AIMessage(content=full_content, tool_calls=tool_calls)
 
     except Exception as e:
         print(f"[DEBUG] NPU Streaming Failed: {str(e)}")
         if full_content:
             return AIMessage(content=full_content, tool_calls=tool_calls)
-        
+
         await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
         raise e
 
@@ -138,7 +138,7 @@ async def main(message: cl.Message):
             return
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか？ '承認'と入力してください。").send()   
+        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記計画通りに進めますか? '承認'と入力してください。").send()   
         messages.append(human_msg)
         messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)

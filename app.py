@@ -52,9 +52,9 @@ async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
                 
         return AIMessage(content=full_content, tool_calls=tool_calls)
     except Exception as e:
-        print(f"--- [STREAM ERROR] ---")
+        print("--- [STREAM ERROR] ---")
         traceback.print_exc()
-        print(f"--- [ERROR END] ---")
+        print("--- [ERROR END] ---")
         if full_content or tool_calls:
             print(f"[WARN] Connection dropped, but content preserved: {str(e)}")
             return AIMessage(content=full_content, tool_calls=tool_calls)

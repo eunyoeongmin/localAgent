@@ -1,6 +1,5 @@
 import os
 import datetime
-import httpx
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from tools import all_tools

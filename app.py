@@ -135,7 +135,6 @@ async def main(message: cl.Message):
 
     max_retries = 3
     current_attempt = 0
-    import asyncio
     while current_attempt < max_retries:
         try:
             response = await safe_llm_call(messages, is_tool=True)
@@ -162,3 +161,4 @@ async def main(message: cl.Message):
 if __name__ == "__main__":
     if "chainlit" not in sys.argv[0]:
         sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860", "--host", "0.0.0.0", "--headless"])
+--port", "7860", "--host", "0.0.0.0", "--headless"])

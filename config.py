@@ -20,6 +20,9 @@ def create_llm(*, temperature: float):
     # /api/v1 が含まれている場合は標準の /v1 に置換し、末尾のスラッシュを削除
     base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
 
+    # [DEBUG] 起動時に接続先URLをコンソールに出力して確認
+    print(f"[DEBUG] Connecting to LLM Server: {base_url}")
+
     # NPUの待機時間を考慮した詳細なタイムアウト設定
     custom_timeout = httpx.Timeout(
         connect=20.0, # 接続試行 20秒待機 (負荷時を考慮)

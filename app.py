@@ -1,8 +1,6 @@
 import sys
 import subprocess
 import importlib.util
-import asyncio
-import traceback
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題を解決するためのランタイムインストール
 try:

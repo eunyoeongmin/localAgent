@@ -1,6 +1,8 @@
 import sys
 import subprocess
 import importlib.util
+import asyncio
+import traceback
 
 # [追加] Hugging Face環境でddgsモジュールが見つからない問題を解決するためのランタイムインストール
 try:
@@ -19,24 +21,39 @@ from tools import all_tools
 tool_llm_with_tools = tool_llm.bind_tools(all_tools)
 
 async def safe_llm_call(messages, is_tool=False):
-    """LLM呼び出しを試行し、失敗した場合はユーザーに通知します。"""
-    # config.pyで既に生成されたインスタンスを再利用
+    """LLM呼び出しを試行します。"""
     llm_instance = chat_llm if not is_tool else tool_llm_with_tools
-
-    import traceback
     try:
-        # [DEBUG] 呼び出し直前にメッセージの型を確認
-        print(f"[DEBUG] Initiating LLM Call (is_tool={is_tool})")
         return await llm_instance.ainvoke(messages)
     except Exception as e:
-        print("--- [CRITICAL ERROR START] ---")
-        print(f"Error Type: {type(e).__name__}")
-        print(f"Error Message: {str(e)}")
-        print("Traceback:")
-        traceback.print_exc()
-        print("--- [CRITICAL ERROR END] ---")
+        print(f"[ERROR] LLM Call Failed: {str(e)}")
+        await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
+        raise e
 
-        await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました。\n型: `{type(e).__name__}`\n詳細: `{str(e)}`").send()
+async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
+    """astreamを使用してLLM応答をストリーミング処理します。"""
+    full_content = ""
+    tool_calls = []
+    llm_instance = chat_llm if not is_tool else tool_llm_with_tools
+
+    try:
+        async for chunk in llm_instance.astream(messages):
+            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+                for tc in chunk.tool_calls:
+                    if not any(existing['id'] == tc['id'] for existing in tool_calls):
+                        tool_calls.append(tc)
+            
+            if chunk.content:
+                full_content += chunk.content
+                await msg.stream_token(chunk.content)
+                
+        return AIMessage(content=full_content, tool_calls=tool_calls)
+    except Exception as e:
+        if full_content or tool_calls:
+            print(f"[WARN] Connection dropped, but content preserved: {str(e)}")
+            return AIMessage(content=full_content, tool_calls=tool_calls)
+        print(f"[ERROR] Streaming Failed: {str(e)}")
+        await cl.Message(content=f"❌ **[システムエラー]** {str(e)}").send()
         raise e
 
 # --- 既存のロジック維持 (UI日本語) ---
@@ -107,10 +124,11 @@ async def main(message: cl.Message):
 
     human_msg = HumanMessage(content=content if images else combined_text)
 
+    # 過去のメッセージから画像を削除（メモリ節約）
     for i in range(len(messages)):
         if isinstance(messages[i], HumanMessage) and isinstance(messages[i].content, list):
             text_only = "".join([item["text"] for item in messages[i].content if item.get("type") == "text"])
-            messages[i] = HumanMessage(content=text_only + "\n[過去の画像はメモリ最適化のため削除されました]")
+            messages[i] = HumanMessage(content=text_only + "\n[過去の画像はメモリ最適화のため削除されました]")
 
     if pending_change_request is not None:
         if is_approval(query):
@@ -137,16 +155,18 @@ async def main(message: cl.Message):
     current_attempt = 0
     while current_attempt < max_retries:
         try:
+            # 1. ツール呼び出し確認
             response = await safe_llm_call(messages, is_tool=True)
+            
             if not response.tool_calls:
-                # 連続呼び出し時のネットワーク衝突を避けるために1秒待機
-                await asyncio.sleep(1)
-                final_response = await safe_llm_call(messages, is_tool=False)
+                # 2. 最終応答 (ストリーミング)
+                final_response = await safe_llm_stream_process(messages, msg, is_tool=False)
                 messages.append(final_response)
                 msg.content = extract_content(final_response.content)
                 await msg.update()
                 break
 
+            # 3. ツール実行
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
@@ -161,4 +181,3 @@ async def main(message: cl.Message):
 if __name__ == "__main__":
     if "chainlit" not in sys.argv[0]:
         sp.run([sys.executable, "-m", "chainlit", "run", __file__, "--port", "7860", "--host", "0.0.0.0", "--headless"])
---port", "7860", "--host", "0.0.0.0", "--headless"])

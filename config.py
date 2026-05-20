@@ -16,7 +16,7 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # /api/v1 が含まれている場合は標準の /v1 に置換し、末尾のスラッシュを削除
+    # /api/v1 が含まれている場合は標準の /v1 に置換し、末尾のス라쉬를 삭제
     base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
 
     # [DEBUG] 起動時に接続先URLをコンソールに出力して確認
@@ -27,9 +27,10 @@ def create_llm(*, temperature: float):
         api_key=LEMONADE_API_KEY,
         model=LEMONADE_MODEL,
         temperature=temperature,
+        streaming=True,
         default_headers={"ngrok-skip-browser-warning": "true"},
-        timeout=300.0, # NPUの思考時間を考慮して5分待機
-        max_retries=3  # 接続エラー時に最大3回自動リトライ
+        timeout=120.0, # NPUの思考時間を考慮
+        max_retries=2
     )
 
 

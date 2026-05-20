@@ -21,17 +21,16 @@ def create_llm(*, temperature: float):
     base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
 
     # NPUの待機時間を考慮した詳細なタイムアウト設定
-
     custom_timeout = httpx.Timeout(
-        connect=10.0, # 接続試行 10秒待機
-        read=120.0,   # NPUの思考時間 120秒まで待機
-        write=10.0,
-        pool=None     # コネクションプーリングをオフにして毎回クリーンに接続
+        connect=20.0, # 接続試行 20秒待機 (負荷時を考慮)
+        read=300.0,   # NPUの思考時間 300秒(5分)まで延長
+        write=20.0,
+        pool=20.0
     )
-    
-    # 接続の安定性のためにKeep-Aliveを無効化
-    limits = httpx.Limits(max_keepalive_connections=0, max_connections=10)
-    
+
+    # 接続の安定性のために適度なプール設定を維持
+    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+
     return ChatOpenAI(
         base_url=base_url,
         api_key=LEMONADE_API_KEY,
@@ -39,9 +38,9 @@ def create_llm(*, temperature: float):
         temperature=temperature,
         default_headers={"ngrok-skip-browser-warning": "true"},
         timeout=custom_timeout,
-        max_retries=5, # 接続失敗時に5回自動リトライ
-        http_client=httpx.Client(limits=limits),
-        http_async_client=httpx.AsyncClient(limits=limits)
+        max_retries=1, # 接続失敗時の過度なリトライを抑制 (Chainlit側のループ防止)
+        http_client=httpx.Client(limits=limits, follow_redirects=True),
+        http_async_client=httpx.AsyncClient(limits=limits, follow_redirects=True)
     )
 
 

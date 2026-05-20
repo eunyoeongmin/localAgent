@@ -30,17 +30,28 @@ async def safe_llm_call(messages, is_tool=False):
         await cl.Message(content=f"❌ **[システムエラー]** モデル呼び出し中にエラーが発生しました: {str(e)}").send()
         raise e
 
-async def safe_llm_stream(messages, msg: cl.Message):
+async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
     """最終回答をストリーミング形式で出力します。"""
     full_content = ""
+    tool_calls = []
+
+    llm_instance = tool_llm_with_tools if is_tool else chat_llm
     try:
-        async for chunk in chat_llm.astream(messages):
+        async for chunk in llm_instance.astream(messages):
+            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+                tool_calls.extend(chunk.tool_calls)
+            
             if chunk.content:
                 full_content += chunk.content
                 await msg.stream_token(chunk.content)
-        return AIMessage(content=full_content)
+                
+        return AIMessage(content=full_content, tool_calls=tool_calls)
+
     except Exception as e:
-        print(f"[DEBUG] Streaming Failed: {str(e)}")
+        print(f"[DEBUG] NPU Streaming Failed: {str(e)}")
+        if full_content:
+            return AIMessage(content=full_content, tool_calls=tool_calls)
+        
         await cl.Message(content=f"❌ **[システムエラー]** ストリーミング中にエラーが発生しました: {str(e)}").send()
         raise e
 
@@ -139,24 +150,21 @@ async def main(message: cl.Message):
     await msg.send()
 
     try:
-        # 1. ツール呼び出しが必要か判断 (判定は一括で行う)
-        response = await safe_llm_call(messages, is_tool=True)
+        response = await safe_llm_stream_process(messages, msg, is_tool=True)
         
-        # ツール呼び出しがない場合は、直接最終回答をストリーミング生成
-        if not response.tool_calls:
-            final_response = await safe_llm_stream(messages, msg)
-            messages.append(final_response)
-        else:
-            # 2. ツール実行プロセス
+        if response.tool_calls:
             messages.append(response)
             for tool_call in response.tool_calls:
                 matched = next((t for t in all_tools if t.name == tool_call['name']), None)
                 result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
             
-            # ツール実行結果に基づいた最終回答をストリーミング生成
-            final_response = await safe_llm_stream(messages, msg)
+            msg_final = cl.Message(content="")
+            await msg_final.send()
+            final_response = await safe_llm_stream_process(messages, msg_final, is_tool=False)
             messages.append(final_response)
+        else:
+            messages.append(response)
             
     except Exception as e:
         print(f"[ERROR] LLM Processing Error: {str(e)}")

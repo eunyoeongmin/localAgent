@@ -15,7 +15,7 @@ TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
 # 💡 ngrokの接続制限を回避するため、Shared Clientを再導入し、接続を使い回します
 shared_async_client = httpx.AsyncClient(
-    timeout=httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=60.0),
+    timeout=httpx.Timeout(connect=120.0, read=300.0, write=30.0, pool=60.0),
     limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
     headers={"ngrok-skip-browser-warning": "true"}, # 💡 クライアントレベルでヘッダーを固定
     follow_redirects=True

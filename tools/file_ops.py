@@ -147,7 +147,7 @@ async def read_local_file(path: str, query: str) -> str:
         print(f"\n[DEBUG] ファイル読み取り: {abs_path}")
         content, chunks, vector_store = await _get_cached_vector_store(abs_path)
         print(
-            f"[DEBUG] 파일 인덱스 완료 - 글자 수: {len(content)}, チャンク数: {len(chunks)}, 모델: {EMBEDDING_MODEL}"
+            f"[DEBUG] ファイルインデックス完了 - 文字数: {len(content)}, チャンク数: {len(chunks)}, モデル: {EMBEDDING_MODEL}"
         )
 
         if _is_full_content_query(query):

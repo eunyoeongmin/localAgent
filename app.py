@@ -63,7 +63,7 @@ async def safe_llm_stream_process(messages, msg: cl.Message, is_tool=False):
         raise e
 
 # --- 既存のロジック維持 (UI日本語) ---
-CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リ네임"]
+CHANGE_ACTION_KEYWORDS = ["修正", "直して", "リファクタリング", "パッチ", "追加", "削除", "変更", "改善", "リネーム"]
 CODE_CONTEXT_KEYWORDS = ["コード", "関数", "クラス", "モジュール", "バグ", "エラー", "テスト", "lint", ".py", ".js", ".ts", ".tsx", ".jsx", ".md", ".json", ".yaml", ".yml"]
 APPROVAL_WORDS = {"承認", "進行", "go", "yes", "y", "ok", "確認"}
 
@@ -138,17 +138,17 @@ async def main(message: cl.Message):
 
     if pending_change_request is not None:
         if is_approval(query):
-            messages.append(HumanMessage(content=f"ユーザー가 계획을 승인했습니다.\n원래 요청: {pending_change_request}"))
+            messages.append(HumanMessage(content=f"ユーザーが計画を承認しました。\n元のリクエスト: {pending_change_request}"))
             cl.user_session.set("pending_change_request", None)
         else:
-            await cl.Message(content="[시스템] 계획이 취소되었습니다.").send()
+            await cl.Message(content="[システム] 計画がキャンセルされました。").send()
             cl.user_session.set("pending_change_request", None)
             return
     elif is_code_change_request(query):
         plan_text = await generate_change_plan(query)
-        await cl.Message(content=f"📋 **[변경 계획]**\n{plan_text}\n\n위 계획대로 진행할까요? '승인'이라고 입력해주세요.").send()   
+        await cl.Message(content=f"📋 **[変更計画]**\n{plan_text}\n\n上記の内容で進行しますか？「承認」と入力してください。").send()   
         messages.append(human_msg)
-        messages.append(AIMessage(content=f"[변경 계획]\n{plan_text}"))
+        messages.append(AIMessage(content=f"[変更計画]\n{plan_text}"))
         cl.user_session.set("pending_change_request", query)
         return
     else:
@@ -161,7 +161,7 @@ async def main(message: cl.Message):
     current_attempt = 0
     while current_attempt < max_retries:
         try:
-            # [DEBUG] 시도 횟수 출력
+            # [DEBUG] 試行回数出力
             print(f"[DEBUG] Processing Turn - Attempt {current_attempt + 1}/{max_retries}")
 
             # 1. ツール呼び出し確認
@@ -169,7 +169,7 @@ async def main(message: cl.Message):
 
             if not response.tool_calls:
                 # 2. 最終応答 (ストリーミング)
-                # ngrokの接続制限を回避するため、連続呼び出しの間に3초의 猶予を与えます
+                # ngrokの接続制限を回避するため、連続呼び出しの間に3秒の猶予を与えます
                 await asyncio.sleep(3)
                 final_response = await safe_llm_stream_process(messages, msg, is_tool=False)
                 messages.append(final_response)
@@ -184,8 +184,7 @@ async def main(message: cl.Message):
                 result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
 
-            # 툴 실행 후 다음 루프(최종 답변 생성)를 위해 시도 횟수 초기화하지 않고 그대로 진행
-            # (만약 툴 실행 후 답변 생성 단계에서 실패하면 다시 툴 확인부터 재시도하게 됨)
+            # ツール実行後、次のループ（最終回答生成）のために試行回数を初期化せずそのまま進行
             continue 
 
         except Exception as e:
@@ -194,7 +193,7 @@ async def main(message: cl.Message):
             if current_attempt >= max_retries:
                 print("[FATAL] Max retries reached. Giving up.")
                 return
-            await asyncio.sleep(5) # 5초 대기 후 재시도
+            await asyncio.sleep(5) # 5秒待機後に再試行
             continue
 
     cl.user_session.set("messages", messages)

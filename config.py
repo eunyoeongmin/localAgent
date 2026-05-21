@@ -13,18 +13,18 @@ LEMONADE_MODEL = os.getenv("LEMONADE_MODEL", "Gemma-4-E2B-it-GGUF")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
 TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.1"))
 
-# 💡 ngrokのTLS接続エラーを回避するため、Shared Clientを再導入し、接続を使い回します
+# 💡 ngrokの接続制限を回避するため、Shared Clientを再導入し、接続を使い回します
 shared_async_client = httpx.AsyncClient(
     timeout=httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=60.0),
     limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
-    follow_redirects=True,
-    verify=False # HTTP/HTTPS両方に対応
+    headers={"ngrok-skip-browser-warning": "true"}, # 💡 クライアントレベルでヘッダーを固定
+    follow_redirects=True
 )
 
 def create_llm(*, temperature: float):
     """Lemonadeサーバーインスタンスを生成します。"""
-    # 💡 ngrokのstart_tlsエラーを避けるため、強制的に http:// を使用します
-    base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1").replace("https://", "http://")
+    # 💡 httpへの強制変換はリダイレクトループを招くため、httpsに戻します
+    base_url = LEMONADE_BASE_URL.strip().rstrip("/").replace("/api/v1", "/v1")
     print(f"[DEBUG] Connecting to LLM Server: {base_url}")
 
     return ChatOpenAI(
@@ -33,7 +33,6 @@ def create_llm(*, temperature: float):
         model=LEMONADE_MODEL,
         temperature=temperature,
         streaming=True,
-        default_headers={"ngrok-skip-browser-warning": "true"},
         http_async_client=shared_async_client, # 💡 共有クライアントを使用
         max_retries=1
     )

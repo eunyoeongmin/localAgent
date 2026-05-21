@@ -184,7 +184,8 @@ async def main(message: cl.Message):
                 result = await matched.ainvoke(tool_call['args']) if matched else "Error: Tool not found."
                 messages.append(ToolMessage(content=str(result), tool_call_id=tool_call['id']))
 
-            # ツール実行後、次のループ（最終回答生成）のために試行回数を初期化せずそのまま進行
+            # ツール実行後、次のループ（最終回答生成）のために試行回수를 초기화하지 않고 그대로 진행
+            # (만약 툴 실행 후 답변 생성 단계에서 실패하면 다시 툴 확인부터 재시도하게 됨)
             continue 
 
         except Exception as e:
